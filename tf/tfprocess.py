@@ -89,6 +89,7 @@ class TFProcess:
         self.y_ = next_batch[1] # tf.placeholder(tf.float32, [None, 1858])
         self.z_ = next_batch[2] # tf.placeholder(tf.float32, [None, 1])
         self.batch_norm_count = 0
+        self.x, self.y_ = self.input_mixup(self.x, self.y_)
         self.y_conv, self.z_conv = self.construct_net(self.x)
 
         # Calculate loss on policy head
@@ -528,3 +529,22 @@ class TFProcess:
         h_fc3 = tf.nn.tanh(tf.add(tf.matmul(h_fc2, W_fc3), b_fc3), name='value_head')
 
         return h_fc1, h_fc3
+
+    def input_mixup(self, x, y):
+        alpha = self.cfg['training'].get('mixup_alpha')
+        if alpha is None:
+            return x, y
+        gpu_batch_size = self.cfg['training']['batch_size'] // self.cfg['training']['num_batch_splits']
+
+        print(f'using mixup with alpha={alpha}')
+        distribution = tf.distributions.Beta(alpha, alpha)
+        lambd = distribution.sample([gpu_batch_size, 1])
+
+        indices = tf.random_shuffle(tf.range(gpu_batch_size))
+        x_permuted = tf.gather(x, indices)
+        y_permuted = tf.gather(y, indices)
+
+        lambd_x = tf.expand_dims(lambd, 2)
+        x_mixed = lambd_x * x + (1 - lambd_x) * x_permuted
+        y_mixed = lambd * y + (1 - lambd) * y_permuted
+        return x_mixed, y_mixed
