@@ -74,6 +74,9 @@ class TFProcess:
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.learning_rate = tf.placeholder(tf.float32)
 
+        self.mixup_layer = tf.placeholder(tf.int32)
+        self.mixup_count = 0
+
     def init(self, dataset, train_iterator, test_iterator):
         # TF variables
         self.handle = tf.placeholder(tf.string, shape=[])
@@ -89,11 +92,6 @@ class TFProcess:
         self.y_ = next_batch[1] # tf.placeholder(tf.float32, [None, 1858])
         self.z_ = next_batch[2] # tf.placeholder(tf.float32, [None, 1])
         self.batch_norm_count = 0
-
-        x_mix, y_mix, z_mix = self.input_mixup(self.x, self.y_, self.z_)
-        self.x = tf.cond(self.training, lambda: x_mix, lambda: self.x)
-        self.y_ = tf.cond(self.training, lambda: y_mix, lambda: self.y_)
-        self.z_ = tf.cond(self.training, lambda: z_mix, lambda: self.z_)
 
         self.y_conv, self.z_conv = self.construct_net(self.x)
 
@@ -245,10 +243,11 @@ class TFProcess:
         # Run training for this batch
         self.session.run(self.zero_op)
         for _ in range(batch_splits):
+            mixup_layer = np.random.randint(self.mixup_count)
             policy_loss, mse_loss, reg_term, _, _ = self.session.run(
                 [self.policy_loss, self.mse_loss, self.reg_term, self.accum_op,
                     self.next_batch],
-                feed_dict={self.training: True, self.handle: self.train_handle})
+                feed_dict={self.training: True, self.handle: self.train_handle, self.mixup_layer: mixup_layer})
             # Keep running averages
             # Google's paper scales MSE by 1/4 to a [0, 1] range, so do the same to
             # get comparable values.
@@ -325,7 +324,8 @@ class TFProcess:
                 [self.policy_loss, self.accuracy, self.mse_loss,
                  self.next_batch],
                 feed_dict={self.training: False,
-                           self.handle: self.test_handle})
+                           self.handle: self.test_handle,
+                           self.mixup_layer: -1})
             sum_accuracy += test_accuracy
             sum_mse += test_mse
             sum_policy += test_policy
@@ -494,6 +494,8 @@ class TFProcess:
         return h_out_2
 
     def construct_net(self, planes):
+        planes = self.mixup(planes)
+
         # NCHW format
         # batch, 112 input channels, 8 x 8
         x_planes = tf.reshape(planes, [-1, 112, 8, 8])
@@ -502,8 +504,11 @@ class TFProcess:
         flow = self.conv_block(x_planes, filter_size=3,
                                input_channels=112,
                                output_channels=self.RESIDUAL_FILTERS)
+        mixup_locations = [self.RESIDUAL_BLOCKS // 4, self.RESIDUAL_BLOCKS // 2]
         # Residual tower
-        for _ in range(0, self.RESIDUAL_BLOCKS):
+        for i in range(0, self.RESIDUAL_BLOCKS):
+            if i in mixup_locations:
+                flow = self.mixup(flow)
             flow = self.residual_block(flow, self.RESIDUAL_FILTERS)
 
         # Policy head
@@ -535,23 +540,30 @@ class TFProcess:
 
         return h_fc1, h_fc3
 
-    def input_mixup(self, x, y, z):
+    def mixup(self, x):
         alpha = self.cfg['training'].get('mixup_alpha')
         if alpha is None:
-            return x, y, z
+            return x
         gpu_batch_size = self.cfg['training']['batch_size'] // self.cfg['training']['num_batch_splits']
 
         print(f'using mixup with alpha={alpha}')
         distribution = tf.distributions.Beta(alpha, alpha)
-        lambd = distribution.sample([gpu_batch_size, 1])
+        lambd = distribution.sample([1, 1])
+        lambd_x = tf.expand_dims(lambd, 2)
 
         indices = tf.random_shuffle(tf.range(gpu_batch_size))
         x_permuted = tf.gather(x, indices)
-        y_permuted = tf.gather(y, indices)
-        z_permuted = tf.gather(z, indices)
+        y_permuted = tf.gather(self.y_, indices)
+        z_permuted = tf.gather(self.z_, indices)
 
-        lambd_x = tf.expand_dims(lambd, 2)
-        x_mix = lambd_x * x + (1 - lambd_x) * x_permuted
-        y_mix = lambd * y + (1 - lambd) * y_permuted
-        z_mix = lambd * z + (1 - lambd) * z_permuted
-        return x_mix, y_mix, z_mix
+        x = self.conditional_mix(x, x_permuted, lambd_x)
+        self.y_ = self.conditional_mix(self.y_, y_permuted, lambd)
+        self.z_ = self.conditional_mix(self.z_, z_permuted, lambd)
+
+        self.mixup_count += 1
+        return x
+
+    def conditional_mix(self, original, permuted, mixing_factor):
+        mixed = mixing_factor * original + (1 - mixing_factor) * permuted
+        condition = tf.logical_and(self.training, self.mixup_layer == self.mixup_count)
+        return tf.cond(condition, lambda: mixed, lambda: original)
