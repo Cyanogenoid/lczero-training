@@ -11,7 +11,7 @@ dataset:
 training:
     batch_size: 1024
     num_batch_splits: 1
-    test_steps: 1000
+    test_steps: 10000
     train_avg_report_steps: 500
     total_steps: 200000
     checkpoint_steps: 10000
