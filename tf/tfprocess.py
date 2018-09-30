@@ -565,5 +565,5 @@ class TFProcess:
 
     def conditional_mix(self, original, permuted, mixing_factor):
         mixed = mixing_factor * original + (1 - mixing_factor) * permuted
-        condition = tf.logical_and(self.training, self.mixup_layer == self.mixup_count)
+        condition = tf.logical_and(self.training, tf.equal(self.mixup_layer, tf.constant(self.mixup_count)))
         return tf.cond(condition, lambda: mixed, lambda: original)
