@@ -27,6 +27,7 @@ import multiprocessing as mp
 import tensorflow as tf
 from tfprocess import TFProcess
 from chunkparser import ChunkParser
+import h5py
 
 SKIP = 32
 
@@ -76,6 +77,40 @@ class FileDataSrc:
                 print("failed to parse {}".format(filename))
 
 
+class H5DataSrc:
+    """
+        data source yielding chunkdata from h5py database.
+    """
+    def __init__(self, db_path):
+        self.db_path = db_path
+        self.db = None
+
+    # do this when running next so that we open the connection after the fork
+    # h5py only works with multiprocessing if opened after the fork
+    def init_db(self):
+        self.db = h5py.File(self.db_path, 'r')
+        self.dataset = self.db['chunks']
+        self.done = list(range(len(self.dataset)))
+        print(len(self.done), 'chunks in db')
+        self.chunks = []
+
+    def next(self):
+        if self.db is None:
+            self.init_db()
+        if not self.chunks:
+            self.chunks, self.done = self.done, self.chunks
+            random.shuffle(self.chunks)
+        if not self.chunks:
+            return None
+        while len(self.chunks):
+            index = self.chunks.pop()
+            try:
+                self.done.append(index)
+                return bytes(self.dataset[index])
+            except:
+                print("failed to parse {}".format(filename))
+
+
 def main(cmd):
     cfg = yaml.safe_load(cmd.cfg.read())
     print(yaml.dump(cfg, default_flow_style=False))
@@ -84,13 +119,6 @@ def main(cmd):
     train_ratio = cfg['dataset']['train_ratio']
     num_train = int(num_chunks*train_ratio)
     num_test = num_chunks - num_train
-    if 'input_test' in cfg['dataset']:
-        train_chunks = get_latest_chunks(cfg['dataset']['input_train'], num_train)
-        test_chunks = get_latest_chunks(cfg['dataset']['input_test'], num_test)
-    else:
-        chunks = get_latest_chunks(cfg['dataset']['input'], num_chunks)
-        train_chunks = chunks[:num_train]
-        test_chunks = chunks[num_train:]
 
     shuffle_size = cfg['training']['shuffle_size']
     total_batch_size = cfg['training']['batch_size']
@@ -105,7 +133,7 @@ def main(cmd):
     if not os.path.exists(root_dir):
         os.makedirs(root_dir)
 
-    train_parser = ChunkParser(FileDataSrc(train_chunks),
+    train_parser = ChunkParser(H5DataSrc(cfg['dataset']['input_train']),
             shuffle_size=shuffle_size, sample=SKIP, batch_size=ChunkParser.BATCH_SIZE)
     dataset = tf.data.Dataset.from_generator(
         train_parser.parse, output_types=(tf.string, tf.string, tf.string))
@@ -114,7 +142,7 @@ def main(cmd):
     train_iterator = dataset.make_one_shot_iterator()
 
     shuffle_size = int(shuffle_size*(1.0-train_ratio))
-    test_parser = ChunkParser(FileDataSrc(test_chunks),
+    test_parser = ChunkParser(H5DataSrc(cfg['dataset']['input_test']),
             shuffle_size=shuffle_size, sample=SKIP, batch_size=ChunkParser.BATCH_SIZE)
     dataset = tf.data.Dataset.from_generator(
         test_parser.parse, output_types=(tf.string, tf.string, tf.string))
