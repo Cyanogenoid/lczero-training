@@ -22,6 +22,7 @@ import yaml
 import sys
 import glob
 import gzip
+import zlib
 import random
 import multiprocessing as mp
 import tensorflow as tf
@@ -106,7 +107,8 @@ class H5DataSrc:
             index = self.chunks.pop()
             try:
                 self.done.append(index)
-                return bytes(self.dataset[index])
+                data = bytes(self.dataset[index])
+                return zlib.decompress(data, wbits=zlib.MAX_WBITS | 16)
             except:
                 print("failed to parse {}".format(filename))
 
