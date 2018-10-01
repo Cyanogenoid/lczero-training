@@ -73,6 +73,7 @@ class TFProcess:
         self.training = tf.placeholder(tf.bool)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.learning_rate = tf.placeholder(tf.float32)
+        self.avg_ratio = None
 
     def init(self, dataset, train_iterator, test_iterator):
         # TF variables
@@ -228,7 +229,7 @@ class TFProcess:
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
             # being equal to the value the end of a run is stored against.
-            self.calculate_test_summaries(test_batches, steps + 1)
+            self.calculate_test_summaries(test_batches // 10, steps + 1)
 
         # Make sure that ghost batch norm can be applied
         if batch_size % 64 != 0:
@@ -262,12 +263,6 @@ class TFProcess:
         # Update steps since training should have incremented it.
         steps = tf.train.global_step(self.session, self.global_step)
 
-        # Determine learning rate
-        lr_values = self.cfg['training']['lr_values']
-        lr_boundaries = self.cfg['training']['lr_boundaries']
-        steps_total = (steps-1) % self.cfg['training']['total_steps']
-        self.lr = lr_values[bisect.bisect_right(lr_boundaries, steps_total)]
-
         if steps % self.cfg['training']['train_avg_report_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0:
             pol_loss_w = self.cfg['training']['policy_loss_weight']
             val_loss_w = self.cfg['training']['value_loss_weight']
@@ -297,6 +292,14 @@ class TFProcess:
                 tf.Summary.Value(tag="Reg term", simple_value=avg_reg_term),
                 tf.Summary.Value(tag="LR", simple_value=self.lr),
                 tf.Summary.Value(tag="MSE Loss", simple_value=avg_mse_loss)])
+
+            # Determine learning rate
+            if self.avg_ratio:
+                self.lr *= 1e-3 / self.avg_ratio
+                self.avg_ratio = None
+                print('new lr: {}'.format(self.lr))
+                self.train_writer.add_summary(tf.Summary(value=[tf.Summary.Value(tag='LR', simple_value=self.lr)]), steps+1)
+
             self.train_writer.add_summary(train_summaries, steps)
             self.train_writer.add_summary(update_ratio_summaries, steps)
             self.time_start = time_end
@@ -306,7 +309,7 @@ class TFProcess:
         # Calculate test values every 'test_steps', but also ensure there is
         # one at the final step so the delta to the first step can be calculted.
         if steps % self.cfg['training']['test_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0:
-            self.calculate_test_summaries(test_batches, steps)
+            self.calculate_test_summaries(test_batches // 10, steps)
 
         # Save session and weights at end, and also optionally every 'checkpoint_steps'.
         if steps % self.cfg['training']['total_steps'] == 0 or (
@@ -364,6 +367,7 @@ class TFProcess:
             tf.Summary.Value(tag='update_ratios/' +
                              tensor.name, simple_value=ratio)
             for tensor, ratio in zip(self.weights, ratios) if not 'moving' in tensor.name]
+        self.avg_ratio = np.mean([r for r in ratios if 0 < r < np.inf])
         ratios = np.log10([r for r in ratios if 0 < r < np.inf])
         all_summaries.append(self.log_histogram('update_ratios_log10', ratios))
         return tf.Summary(value=all_summaries)
