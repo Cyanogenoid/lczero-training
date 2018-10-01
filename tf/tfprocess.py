@@ -556,15 +556,17 @@ class TFProcess:
                                input_channels=112,
                                output_channels=self.RESIDUAL_FILTERS)
         # Residual tower
-        for _ in range(0, self.RESIDUAL_BLOCKS):
+        for i in range(0, self.RESIDUAL_BLOCKS):
+            if i == self.RESIDUAL_BLOCKS // 2:
+                flow = tf.nn.max_pool(flow, [1, 1, 2, 2], [1, 1, 2, 2], padding='VALID', data_format='NCHW')
             flow = self.residual_block(flow, self.RESIDUAL_FILTERS)
 
         # Policy head
         conv_pol = self.conv_block(flow, filter_size=1,
                                    input_channels=self.RESIDUAL_FILTERS,
                                    output_channels=32)
-        h_conv_pol_flat = tf.reshape(conv_pol, [-1, 32*8*8])
-        W_fc1 = weight_variable([32*8*8, 1858], name='fc1/weight')
+        h_conv_pol_flat = tf.reshape(conv_pol, [-1, 32*4*4])
+        W_fc1 = weight_variable([32*4*4, 1858], name='fc1/weight')
         b_fc1 = bias_variable([1858], name='fc1/bias')
         self.weights.append(W_fc1)
         self.weights.append(b_fc1)
@@ -574,8 +576,8 @@ class TFProcess:
         conv_val = self.conv_block(flow, filter_size=1,
                                    input_channels=self.RESIDUAL_FILTERS,
                                    output_channels=32)
-        h_conv_val_flat = tf.reshape(conv_val, [-1, 32*8*8])
-        W_fc2 = weight_variable([32 * 8 * 8, 128], name='fc2/weight')
+        h_conv_val_flat = tf.reshape(conv_val, [-1, 32*4*4])
+        W_fc2 = weight_variable([32 * 4 * 4, 128], name='fc2/weight')
         b_fc2 = bias_variable([128], name='fc2/bias')
         self.weights.append(W_fc2)
         self.weights.append(b_fc2)
