@@ -51,7 +51,7 @@ def bias_variable(shape, name=None):
 
 def conv2d(x, W, dilations=[1, 1, 1, 1]):
     return tf.nn.conv2d(x, W, data_format='NCHW',
-                        strides=[1, 1, 1, 1], padding='SAME', dilations=dilation)
+                        strides=[1, 1, 1, 1], padding='SAME', dilations=dilations)
 
 class TFProcess:
     def __init__(self, cfg):
