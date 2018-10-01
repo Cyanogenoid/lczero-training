@@ -228,7 +228,7 @@ class TFProcess:
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
             # being equal to the value the end of a run is stored against.
-            self.calculate_test_summaries(test_batches, steps + 1)
+            self.calculate_test_summaries(test_batches // 10, steps + 1)
 
         # Make sure that ghost batch norm can be applied
         if batch_size % 64 != 0:
@@ -306,7 +306,7 @@ class TFProcess:
         # Calculate test values every 'test_steps', but also ensure there is
         # one at the final step so the delta to the first step can be calculted.
         if steps % self.cfg['training']['test_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0:
-            self.calculate_test_summaries(test_batches, steps)
+            self.calculate_test_summaries(test_batches // 10, steps)
 
         # Save session and weights at end, and also optionally every 'checkpoint_steps'.
         if steps % self.cfg['training']['total_steps'] == 0 or (
