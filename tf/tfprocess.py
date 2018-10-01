@@ -49,9 +49,9 @@ def bias_variable(shape, name=None):
     initial = tf.constant(0.0, shape=shape)
     return tf.Variable(initial, name=name)
 
-def conv2d(x, W):
+def conv2d(x, W, dilations=[1, 1, 1, 1]):
     return tf.nn.conv2d(x, W, data_format='NCHW',
-                        strides=[1, 1, 1, 1], padding='SAME')
+                        strides=[1, 1, 1, 1], padding='SAME', dilations=dilation)
 
 class TFProcess:
     def __init__(self, cfg):
@@ -443,7 +443,7 @@ class TFProcess:
         with tf.variable_scope(weight_key_1):
             h_bn1 = \
                 tf.layers.batch_normalization(
-                    conv2d(inputs, W_conv_1),
+                    conv2d(inputs, W_conv_1, dilations=[1, 1, 2, 2]),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
