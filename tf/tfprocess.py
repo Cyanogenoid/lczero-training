@@ -73,6 +73,7 @@ class TFProcess:
         self.training = tf.placeholder(tf.bool)
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
         self.learning_rate = tf.placeholder(tf.float32)
+        self.momentum = tf.placeholder(tf.float32)
 
     def init(self, dataset, train_iterator, test_iterator):
         # TF variables
@@ -113,14 +114,10 @@ class TFProcess:
         val_loss_w = self.cfg['training']['value_loss_weight']
         loss = pol_loss_w * self.policy_loss + val_loss_w * self.mse_loss + self.reg_term
 
-        # Set adaptive learning rate during training
-        self.cfg['training']['lr_boundaries'].sort()
-        self.lr = self.cfg['training']['lr_values'][0]
-
         # You need to change the learning rate here if you are training
         # from a self-play training set, for example start with 0.005 instead.
         opt_op = tf.train.MomentumOptimizer(
-            learning_rate=self.learning_rate, momentum=0.9, use_nesterov=True)
+            learning_rate=self.learning_rate, momentum=self.momentum, use_nesterov=True)
 
         # Accumulate (possibly multiple) gradient updates to simulate larger batch sizes than can be held in GPU memory.
         gradient_accum = [tf.Variable(tf.zeros_like(var.initialized_value()), trainable=False) for var in tf.trainable_variables()]
@@ -155,6 +152,12 @@ class TFProcess:
         self.saver = tf.train.Saver()
 
         self.session.run(self.init)
+
+        self.phase_1_steps = int(self.cfg['training']['total_steps'] * self.cfg['training']['lr_warmup_ratio'])
+        phase_2_steps = self.cfg['training']['total_steps'] - self.phase_1_steps
+        phase_1 = np.linspace(0, 1, self.phase_1_steps, endpoint=False)
+        phase_2 = np.cos(np.linspace(0, 1, phase_2_steps, endpoint=False) * np.pi) / 2 + 0.5
+        self.lr_schedule = np.concatenate([phase_1, phase_2])
 
     def replace_weights(self, new_weights):
         for e, weights in enumerate(self.weights):
@@ -224,6 +227,13 @@ class TFProcess:
         if not self.last_steps:
             self.last_steps = steps
 
+        # Determine learning rate and momentum
+        if steps >= self.phase_1_steps:
+            self.cfg['training']['lr_values'][0] = 0
+        interpolation = self.lr_schedule[steps]
+        self.lr = self.cfg['training']['lr_values'][0] + interpolation * (self.cfg['training']['lr_values'][1] - self.cfg['training']['lr_values'][0])
+        self.mom = self.cfg['training']['momentum_values'][0] + interpolation * (self.cfg['training']['momentum_values'][1] - self.cfg['training']['momentum_values'][0])
+
         # Run test before first step to see delta since end of last run.
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
@@ -253,16 +263,10 @@ class TFProcess:
         # Gradients of batch splits are summed, not averaged like usual, so need to scale lr accordingly to correct for this.
         corrected_lr = self.lr / batch_splits
         self.session.run(self.train_op,
-            feed_dict={self.learning_rate: corrected_lr, self.training: True, self.handle: self.train_handle})
+            feed_dict={self.learning_rate: corrected_lr, self.momentum: self.mom, self.training: True, self.handle: self.train_handle})
 
         # Update steps since training should have incremented it.
         steps = tf.train.global_step(self.session, self.global_step)
-
-        # Determine learning rate
-        lr_values = self.cfg['training']['lr_values']
-        lr_boundaries = self.cfg['training']['lr_boundaries']
-        steps_total = (steps-1) % self.cfg['training']['total_steps']
-        self.lr = lr_values[bisect.bisect_right(lr_boundaries, steps_total)]
 
         if steps % self.cfg['training']['train_avg_report_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0:
             pol_loss_w = self.cfg['training']['policy_loss_weight']
