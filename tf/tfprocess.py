@@ -156,6 +156,8 @@ class TFProcess:
 
         self.session.run(self.init)
 
+        self.lr_schedule = np.logspace(-5, 2, 1001)
+
     def replace_weights(self, new_weights):
         for e, weights in enumerate(self.weights):
             if weights.name.endswith('/batch_normalization/beta:0'):
@@ -211,7 +213,7 @@ class TFProcess:
         # Get the initial steps value in case this is a resume from a step count
         # which is not a multiple of total_steps.
         steps = tf.train.global_step(self.session, self.global_step)
-        total_steps = self.cfg['training']['total_steps']
+        total_steps = 1001
         for _ in range(steps % total_steps, total_steps):
             self.process(batch_size, test_batches, batch_splits=batch_splits)
 
@@ -224,11 +226,13 @@ class TFProcess:
         if not self.last_steps:
             self.last_steps = steps
 
+        '''
         # Run test before first step to see delta since end of last run.
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
             # being equal to the value the end of a run is stored against.
             self.calculate_test_summaries(test_batches, steps + 1)
+            '''
 
         # Make sure that ghost batch norm can be applied
         if batch_size % 64 != 0:
@@ -259,12 +263,9 @@ class TFProcess:
         steps = tf.train.global_step(self.session, self.global_step)
 
         # Determine learning rate
-        lr_values = self.cfg['training']['lr_values']
-        lr_boundaries = self.cfg['training']['lr_boundaries']
-        steps_total = (steps-1) % self.cfg['training']['total_steps']
-        self.lr = lr_values[bisect.bisect_right(lr_boundaries, steps_total)]
+        self.lr = self.lr_schedule[steps - 1]
 
-        if steps % self.cfg['training']['train_avg_report_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0:
+        if steps % self.cfg['training']['train_avg_report_steps'] == 0 or steps % self.cfg['training']['total_steps'] == 0 or True:  # always log
             pol_loss_w = self.cfg['training']['policy_loss_weight']
             val_loss_w = self.cfg['training']['value_loss_weight']
             time_end = time.time()
