@@ -491,6 +491,12 @@ class TFProcess:
         # NCHW format
         # batch, 112 input channels, 8 x 8
         x_planes = tf.reshape(planes, [-1, 112, 8, 8])
+        x_planes = tf.layers.batch_normalization(
+            x_planes,
+            epsilon=1e-5, axis=1, fused=True,
+            center=True, scale=False,
+            virtual_batch_size=64,
+            training=self.training)
 
         # Input convolution
         flow = self.conv_block(x_planes, filter_size=3,
