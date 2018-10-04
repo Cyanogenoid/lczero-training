@@ -468,7 +468,6 @@ class TFProcess:
                     conv2d(inputs, W_conv),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
-                    virtual_batch_size=64,
                     training=self.training)
         h_conv = tf.nn.relu(h_bn)
 
@@ -505,7 +504,6 @@ class TFProcess:
                     conv2d(inputs, W_conv_1),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
-                    virtual_batch_size=64,
                     training=self.training)
         h_out_1 = tf.nn.relu(h_bn1)
         with tf.variable_scope(weight_key_2):
@@ -514,7 +512,6 @@ class TFProcess:
                     conv2d(h_out_1, W_conv_2),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
-                    virtual_batch_size=64,
                     training=self.training)
         h_out_2 = tf.nn.relu(tf.add(h_bn2, orig))
 
