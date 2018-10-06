@@ -84,6 +84,7 @@ class TFProcess:
         self.train_handle = self.session.run(train_iterator.string_handle())
         self.test_handle = self.session.run(test_iterator.string_handle())
         self.init_net(self.next_batch)
+        self.replace_weights(self.teacher_net.get_weights(), weight_vars=self.teacher_weights)
 
     def init_net(self, next_batch):
         self.x = next_batch[0]  # tf.placeholder(tf.float32, [None, 112, 8*8])
@@ -101,9 +102,9 @@ class TFProcess:
 
         net = Net()
         net.parse_proto(self.cfg['training']['teacher_path'])
-        self.replace_weights(net.get_weights())
+        self.teacher_net = net
 
-        self.weights = []
+        self.teacher_weights, self.weights = self.weights, []
         self.batch_norm_count = 0
         with tf.variable_scope('student'):
             self.distill_phase = 'student'
@@ -180,8 +181,10 @@ class TFProcess:
 
         self.session.run(self.init)
 
-    def replace_weights(self, new_weights):
-        for e, weights in enumerate(self.weights):
+    def replace_weights(self, new_weights, weight_vars=None):
+        if not weight_vars:
+            weight_vars = self.weights
+        for e, weights in enumerate(weight_vars):
             if weights.name.endswith('/batch_normalization/beta:0'):
                 # Batch norm beta is written as bias before the batch normalization
                 # in the weight file for backwards compatibility reasons.
