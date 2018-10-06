@@ -433,7 +433,7 @@ class TFProcess:
                 # Batch norm beta needs to be converted to biases before
                 # the batch norm for backwards compatibility reasons
                 var_key = weights.name.replace('beta', 'moving_variance')
-                var = tf.get_default_graph().get_tensor_by_name(f'{self.distill_phase}/{var_key}')
+                var = tf.get_default_graph().get_tensor_by_name(var_key)
                 work_weights = tf.multiply(weights, tf.sqrt(var + tf.constant(1e-5)))
             elif weights.shape.ndims == 4:
                 # Convolution weights need a transpose
