@@ -91,6 +91,13 @@ class TFProcess:
         self.y_ = next_batch[1] # tf.placeholder(tf.float32, [None, 1858])
         self.z_ = next_batch[2] # tf.placeholder(tf.float32, [None, 1])
 
+        net = Net()
+        net.parse_proto(self.cfg['training']['teacher_path'])
+        self.teacher_net = net
+
+        student_filters, self.RESIDUAL_FILTERS = self.RESIDUAL_FILTERS, net.filters()
+        student_blocks, self.RESIDUAL_BLOCKS = self.RESIDUAL_BLOCKS, net.blocks()
+
         self.batch_norm_count = 0
         with tf.variable_scope('teacher'):
             self.distill_phase = 'teacher'
@@ -100,10 +107,8 @@ class TFProcess:
         trainable_vars = tf.get_collection_ref(tf.GraphKeys.TRAINABLE_VARIABLES)
         del trainable_vars[:]
 
-        net = Net()
-        net.parse_proto(self.cfg['training']['teacher_path'])
-        self.teacher_net = net
-
+        self.RESIDUAL_FILTERS = student_filters
+        self.RESIDUAL_BLOCKS = student_blocks
         self.teacher_weights, self.weights = self.weights, []
         self.batch_norm_count = 0
         with tf.variable_scope('student'):
