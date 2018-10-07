@@ -110,19 +110,19 @@ class TFProcess:
             self.distill_phase = 'student'
             self.y_student, self.z_student = self.construct_net(self.x)
 
-        distill_ratio = self.cfg['training']['distill_ratio']
+        self.distill_ratio = tf.placeholder(tf.float32)
         # Calculate loss on policy head
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits
         self.policy_loss = tf.cond(self.training,
-            lambda: (1 - distill_ratio) * tf.reduce_mean(cross_entropy(labels=self.y_, logits=self.y_student)) + \
-                  distill_ratio * tf.reduce_mean(cross_entropy(labels=self.y_teacher, logits=self.y_student)),
+            lambda: (1 - self.distill_ratio) * tf.reduce_mean(cross_entropy(labels=self.y_, logits=self.y_student)) + \
+                  self.distill_ratio * tf.reduce_mean(cross_entropy(labels=self.y_teacher, logits=self.y_student)),
             lambda: tf.reduce_mean(cross_entropy(labels=self.y_, logits=self.y_student))
         )
 
         # Loss on value head
         self.mse_loss = tf.cond(self.training,
-            lambda: (1 - distill_ratio) * tf.reduce_mean(tf.squared_difference(self.z_, self.z_student)) + \
-                  distill_ratio * tf.reduce_mean(tf.squared_difference(self.z_teacher, self.z_student)),
+            lambda: (1 - self.distill_ratio) * tf.reduce_mean(tf.squared_difference(self.z_, self.z_student)) + \
+                  self.distill_ratio * tf.reduce_mean(tf.squared_difference(self.z_teacher, self.z_student)),
             lambda: tf.reduce_mean(tf.squared_difference(self.z_, self.z_student))
         )
 
@@ -273,7 +273,7 @@ class TFProcess:
             policy_loss, mse_loss, reg_term, _, _ = self.session.run(
                 [self.policy_loss, self.mse_loss, self.reg_term, self.accum_op,
                     self.next_batch],
-                feed_dict={self.training: True, self.handle: self.train_handle})
+                feed_dict={self.training: True, self.handle: self.train_handle, self.distill_ratio: 1 - (steps / self.cfg['training']['total_steps'])})
             # Keep running averages
             # Google's paper scales MSE by 1/4 to a [0, 1] range, so do the same to
             # get comparable values.
@@ -355,7 +355,9 @@ class TFProcess:
                 [self.policy_loss, self.accuracy, self.mse_loss,
                  self.next_batch],
                 feed_dict={self.training: False,
-                           self.handle: self.test_handle})
+                           self.handle: self.test_handle,
+                           self.distill_ratio: 0.0,
+                           })
             sum_accuracy += test_accuracy
             sum_mse += test_mse
             sum_policy += test_policy
