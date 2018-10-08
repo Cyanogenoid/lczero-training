@@ -148,7 +148,7 @@ class TFProcess:
         self.policy_accuracy = tf.reduce_mean(correct_policy_prediction)
         correct_value_prediction = \
             tf.equal(tf.argmax(self.z_conv, 1), tf.argmax(self.z_, 1))
-        correct_value_prediction = tf.cast(correct_policy_prediction, tf.float32)
+        correct_value_prediction = tf.cast(correct_value_prediction, tf.float32)
         self.value_accuracy = tf.reduce_mean(correct_value_prediction)
 
         self.avg_policy_loss = []
@@ -164,6 +164,7 @@ class TFProcess:
         self.train_writer = tf.summary.FileWriter(
             os.path.join(os.getcwd(), "leelalogs/{}-train".format(self.cfg['name'])), self.session.graph)
         self.histograms = [tf.summary.histogram(weight.name, weight) for weight in self.weights]
+        self.value_confusion = tf.confusion_matrix(tf.argmax(self.z_, 1), tf.argmax(self.z_conv, 1), num_classes=3)
 
         self.init = tf.global_variables_initializer()
         self.saver = tf.train.Saver()
@@ -321,9 +322,10 @@ class TFProcess:
         sum_mse = 0
         sum_policy = 0
         sum_value = 0
-        for _ in range(0, test_batches):
-            test_policy, test_value, test_policy_accuracy, test_value_accuracy, test_mse, _ = self.session.run(
-                [self.policy_loss, self.value_loss, self.policy_accuracy, self.value_accuracy, self.mse_loss,
+        sum_confusion = None
+        for i in range(0, test_batches):
+            test_policy, test_value, test_policy_accuracy, test_value_accuracy, test_mse, test_vconfusion, _ = self.session.run(
+                [self.policy_loss, self.value_loss, self.policy_accuracy, self.value_accuracy, self.mse_loss, self.value_confusion,
                  self.next_batch],
                 feed_dict={self.training: False,
                            self.handle: self.test_handle})
@@ -332,6 +334,11 @@ class TFProcess:
             sum_mse += test_mse
             sum_policy += test_policy
             sum_value += test_value
+            if sum_confusion is None:
+                sum_confusion = test_vconfusion
+            else:
+                sum_confusion += test_vconfusion
+            print(sum_confusion / (i+1))
         sum_policy_accuracy /= test_batches
         sum_policy_accuracy *= 100
         sum_value_accuracy /= test_batches
