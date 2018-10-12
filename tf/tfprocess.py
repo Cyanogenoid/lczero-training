@@ -88,8 +88,15 @@ class TFProcess:
         self.x = next_batch[0]  # tf.placeholder(tf.float32, [None, 112, 8*8])
         self.y_ = next_batch[1] # tf.placeholder(tf.float32, [None, 1858])
         self.z_ = next_batch[2] # tf.placeholder(tf.float32, [None, 1])
+        self.legal_ = next_batch[3] # tf.placeholder(tf.float32, [None, 1858])
         self.batch_norm_count = 0
         self.y_conv, self.z_conv = self.construct_net(self.x)
+
+        """
+        is_legal = tf.equal(self.legal_, 1.0)
+        self.y_conv = tf.where(is_legal, self.y_conv, -1000)  # mask away illegal moves
+        """
+        self.y_conv = self.y_conv - (1 - self.legal_) * 10000  # mask away illegal moves
 
         # Calculate loss on policy head
         cross_entropy = \

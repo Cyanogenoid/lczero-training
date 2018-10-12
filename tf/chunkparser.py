@@ -27,7 +27,7 @@ import tensorflow as tf
 import unittest
 
 VERSION = struct.pack('i', 3)
-STRUCT_STRING = '4s7432s832sBBBBBBBb'
+STRUCT_STRING = '4s7432s832sBBBBBBB1858sb'
 
 # Interface for a chunk data source.
 class ChunkDataSrc:
@@ -124,23 +124,26 @@ class ChunkParser:
             uint8 side_to_move (1 byte) aka us_black
             uint8 rule50_count (1 byte)
             uint8 move_count (1 byte)
+            1858 uint8 legal_moves (1858 bytes)
             int8 result (1 byte)
         """
         self.v3_struct = struct.Struct(STRUCT_STRING)
 
 
     @staticmethod
-    def parse_function(planes, probs, winner):
+    def parse_function(planes, probs, winner, legal_moves):
         """
         Convert unpacked record batches to tensors for tensorflow training
         """
         planes = tf.decode_raw(planes, tf.float32)
         probs = tf.decode_raw(probs, tf.float32)
         winner = tf.decode_raw(winner, tf.float32)
+        legal_moves = tf.decode_raw(winner, tf.float32)
 
         planes = tf.reshape(planes, (ChunkParser.BATCH_SIZE, 112, 8*8))
         probs = tf.reshape(probs, (ChunkParser.BATCH_SIZE, 1858))
         winner = tf.reshape(winner, (ChunkParser.BATCH_SIZE, 1))
+        legal_moves = tf.reshape(legal_moves, (ChunkParser.BATCH_SIZE, 1858))
 
         return (planes, probs, winner)
 
@@ -160,14 +163,16 @@ class ChunkParser:
             uint8 side_to_move (1 byte)
             uint8 rule50_count (1 byte)
             uint8 move_count (1 byte)
+            1858 legal_moves (1858 bytes)
             int8 result (1 byte)
         """
-        (ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner) = self.v3_struct.unpack(content)
+        (ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, legal_moves, winner) = self.v3_struct.unpack(content)
         # Enforce move_count to 0
         move_count = 0
 
         # Unpack bit planes and cast to 32 bit float
         planes = np.unpackbits(np.frombuffer(planes, dtype=np.uint8)).astype(np.float32)
+        legal_moves = np.frombuffer(legal_moves, dtype=np.uint8).astype(np.float32)
         rule50_plane = (np.zeros(8*8, dtype=np.float32) + rule50_count) / 99
 
         # Concatenate all byteplanes. Make the last plane all 1's so the NN can
@@ -182,12 +187,14 @@ class ChunkParser:
                  self.flat_planes[move_count].tobytes() + \
                  self.flat_planes[1].tobytes()
 
+        legal_moves = legal_moves.tobytes()
+
         assert len(planes) == ((8*13*1 + 8*1*1) * 8 * 8 * 4)
         winner = float(winner)
         assert winner == 1.0 or winner == -1.0 or winner == 0.0
         winner = struct.pack('f', winner)
 
-        return (planes, probs, winner)
+        return (planes, probs, winner, legal_moves)
 
 
     def sample_record(self, chunkdata):
@@ -323,7 +330,7 @@ class ChunkParserTest(unittest.TestCase):
         """
         Test struct size
         """
-        self.assertEqual(self.v3_struct.size, 8276)
+        self.assertEqual(self.v3_struct.size, 8276 + 1858)
 
 
     def test_parsing(self):
