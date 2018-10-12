@@ -138,14 +138,14 @@ class ChunkParser:
         planes = tf.decode_raw(planes, tf.float32)
         probs = tf.decode_raw(probs, tf.float32)
         winner = tf.decode_raw(winner, tf.float32)
-        legal_moves = tf.decode_raw(winner, tf.float32)
+        legal_moves = tf.decode_raw(legal_moves, tf.float32)
 
         planes = tf.reshape(planes, (ChunkParser.BATCH_SIZE, 112, 8*8))
         probs = tf.reshape(probs, (ChunkParser.BATCH_SIZE, 1858))
         winner = tf.reshape(winner, (ChunkParser.BATCH_SIZE, 1))
         legal_moves = tf.reshape(legal_moves, (ChunkParser.BATCH_SIZE, 1858))
 
-        return (planes, probs, winner)
+        return (planes, probs, winner, legal_moves)
 
 
     def convert_v3_to_tuple(self, content):
