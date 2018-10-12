@@ -96,7 +96,7 @@ class TFProcess:
         is_legal = tf.equal(self.legal_, 1.0)
         self.y_conv = tf.where(is_legal, self.y_conv, -1000)  # mask away illegal moves
         """
-        self.y_conv = self.y_conv - (1 - self.legal_) * 10000  # mask away illegal moves
+        self.y_conv = self.y_conv - (1.0 - self.legal_) * 10000.0  # mask away illegal moves
 
         # Calculate loss on policy head
         cross_entropy = \

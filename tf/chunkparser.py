@@ -275,7 +275,9 @@ class ChunkParser:
                 return
             yield ( b''.join([x[0] for x in s]),
                     b''.join([x[1] for x in s]),
-                    b''.join([x[2] for x in s]) )
+                    b''.join([x[2] for x in s]),
+                    b''.join([x[3] for x in s]),
+                    )
 
 
     def parse(self):
