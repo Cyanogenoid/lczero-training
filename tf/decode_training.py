@@ -2022,7 +2022,7 @@ class TrainingStep:
             s += "(Note the black pieces are CAPS, black moves up, but A1 is in lower left)\n"
         s += "rule50_count {} b_ooo b_oo, w_ooo, w_oo {} {} {} {}\n".format(
             self.rule50_count, self.us_ooo, self.us_oo, self.them_ooo, self.them_oo)
-        s += 'legal moves ({}): '.format(len(self.legals)
+        s += 'legal moves ({}): '.format(len(self.legals))
         for l in self.legals:
             s += self.new_rev_white_move_map[l]
             s += ' '
@@ -2094,6 +2094,13 @@ class TrainingStep:
                 self.legals.append(i)
         for idx in range(0, len(probs), 4):
             self.probs.append(struct.unpack("f", probs[idx:idx+4])[0])
+
+        top_move = max(enumerate(self.probs), key=lambda x: x[1])[0]
+        print(top_move)
+        if top_move not in self.legals:
+            t = self.new_rev_white_move_map[top_move]
+            l = [self.new_rev_white_move_map[m] for m in self.legals]
+            print(f'WARNING: {t} not in {" ".join(l)}')
         print("ply {} move {} (Not actually part of training data)".format(
             ply+1, (ply+2)//2))
         print(self.describe())
