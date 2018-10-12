@@ -54,7 +54,7 @@ from collections import defaultdict
 #
 VERSION3 = chunkparser.VERSION
 
-V3_BYTES = 8276
+V3_BYTES = 10134
 
 # Us   -- uppercase
 # Them -- lowercase
@@ -2022,6 +2022,11 @@ class TrainingStep:
             s += "(Note the black pieces are CAPS, black moves up, but A1 is in lower left)\n"
         s += "rule50_count {} b_ooo b_oo, w_ooo, w_oo {} {} {} {}\n".format(
             self.rule50_count, self.us_ooo, self.us_oo, self.them_ooo, self.them_oo)
+        s += 'legal moves ({}): '.format(len(self.legals)
+        for l in self.legals:
+            s += self.new_rev_white_move_map[l]
+            s += ' '
+        s += '\n'
         s += "  abcdefgh\n"
         rank_strings = [[]]
         for rank in reversed(range(8)):
@@ -2062,7 +2067,7 @@ class TrainingStep:
         return "".join([plane[x:x+2] for x in reversed(range(0, len(plane), 2))])
 
     def display_v2_or_v3(self, ply, content):
-        (ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, us_black, rule50_count, move_count, winner) = self.this_struct.unpack(content)
+        (ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, us_black, rule50_count, move_count, legal, winner) = self.this_struct.unpack(content)
         assert self.version == int.from_bytes(ver, byteorder="little")
         # Enforce move_count to 0
         move_count = 0
@@ -2082,6 +2087,11 @@ class TrainingStep:
         self.us_black = us_black
         self.rule50_count = rule50_count
         self.winner = winner
+        self.legals = []
+        for i, move in enumerate(legal):
+            move = int(move)
+            if int(move) == 1:
+                self.legals.append(i)
         for idx in range(0, len(probs), 4):
             self.probs.append(struct.unpack("f", probs[idx:idx+4])[0])
         print("ply {} move {} (Not actually part of training data)".format(
