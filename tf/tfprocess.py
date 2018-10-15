@@ -92,8 +92,7 @@ class TFProcess:
         self.batch_norm_count = 0
         self.y_conv, self.z_conv = self.construct_net(self.x)
 
-        is_legal = tf.equal(self.legal_, 1.0)
-        self.y_conv = tf.where(is_legal, self.y_conv, tf.constant(-1000.0, shape=[1024, 1858]))  # mask away illegal moves
+        self.y_conv = self.y_conv - (1.0 - self.legal_) * 1000000.0  # mask away illegal moves
 
         # Calculate loss on policy head
         cross_entropy = \
