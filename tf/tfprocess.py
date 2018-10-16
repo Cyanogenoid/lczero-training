@@ -552,12 +552,12 @@ class TFProcess:
         x_planes = tf.reshape(planes, [-1, 112, 8, 8])
 
         splits = 8 * [12, 1] + [8]
-        groups = tf.split(x_planes, splits)
+        groups = tf.split(x_planes, splits, 1)
         reference_position = groups[0]  # current position
         for i in range(1, 8):
             # every second index is repetition plane, skip those
             reference_position, groups[2*i] = groups[2*i], groups[2*i] - reference_position
-        x_planes = tf.concat(groups, 0)
+        x_planes = tf.concat(groups, 1)
 
         # Input convolution
         flow = self.conv_block(x_planes, filter_size=3,
