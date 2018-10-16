@@ -167,7 +167,7 @@ class ChunkParser:
         move_count = 0
 
         # Unpack bit planes and cast to 32 bit float
-        planes = np.unpackbits(np.frombuffer(planes, dtype=np.uint8)).astype(np.float32)
+        planes = np.unpackbits(np.frombuffer(planes, dtype=np.uint8)).astype(np.float32) * 8
         rule50_plane = (np.zeros(8*8, dtype=np.float32) + rule50_count) / 99
 
         # Concatenate all byteplanes. Make the last plane all 1's so the NN can

@@ -122,6 +122,12 @@ class TFProcess:
         opt_op = tf.train.MomentumOptimizer(
             learning_rate=self.learning_rate, momentum=0.9, use_nesterov=True)
 
+        w = self.weights[0]
+        plane_is_history = tf.constant(13 * [False] + 7 * 13 * [True] + 8 * [False])
+        is_history = tf.tile(tf.reshape(plane_is_history, [1, 1, 112, 1]), [w.shape[0], w.shape[1], 1, w.shape[3]])
+        zeroed_weights = tf.where(is_history, tf.zeros_like(w), w)
+        self.zero_history_op = tf.assign(self.weights[0], zeroed_weights)
+
         # Accumulate (possibly multiple) gradient updates to simulate larger batch sizes than can be held in GPU memory.
         gradient_accum = [tf.Variable(tf.zeros_like(var.initialized_value()), trainable=False) for var in tf.trainable_variables()]
         self.zero_op = [var.assign(tf.zeros_like(var)) for var in gradient_accum]
@@ -241,7 +247,7 @@ class TFProcess:
             before_weights = self.session.run(self.weights)
 
         # Run training for this batch
-        self.session.run(self.zero_op)
+        self.session.run([self.zero_op, self.zero_history_op])
         for _ in range(batch_splits):
             policy_loss, mse_loss, reg_term, _, _ = self.session.run(
                 [self.policy_loss, self.mse_loss, self.reg_term, self.accum_op,
@@ -320,6 +326,7 @@ class TFProcess:
             print("Weights saved in file: {}".format(leela_path))
 
     def calculate_test_summaries(self, test_batches, steps):
+        self.session.run(self.zero_history_op)
         sum_accuracy = 0
         sum_mse = 0
         sum_policy = 0
@@ -401,6 +408,7 @@ class TFProcess:
             return tf.Summary.Value(tag=tag, histo=hist)
 
     def save_leelaz_weights(self, filename):
+        self.session.run(self.zero_history_op)
         all_weights = []
         for e, weights in enumerate(self.weights):
             # Newline unless last line (single bias)
