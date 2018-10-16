@@ -557,6 +557,7 @@ class TFProcess:
         for i in range(1, 8):
             # every second index is repetition plane, skip those
             reference_position, groups[2*i] = groups[2*i], groups[2*i] - reference_position
+        groups[0] = groups[0] * 8  # scale normalisation to match previous set-up
         x_planes = tf.concat(groups, 1)
 
         # Input convolution
