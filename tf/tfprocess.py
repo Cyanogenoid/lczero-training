@@ -119,8 +119,8 @@ class TFProcess:
 
         # You need to change the learning rate here if you are training
         # from a self-play training set, for example start with 0.005 instead.
-        opt_op = tf.train.MomentumOptimizer(
-            learning_rate=self.learning_rate, momentum=0.9, use_nesterov=True)
+        opt_op = tf.contrib.opt.GGTOptimizer(
+            learning_rate=self.learning_rate)
 
         # Accumulate (possibly multiple) gradient updates to simulate larger batch sizes than can be held in GPU memory.
         gradient_accum = [tf.Variable(tf.zeros_like(var.initialized_value()), trainable=False) for var in tf.trainable_variables()]
