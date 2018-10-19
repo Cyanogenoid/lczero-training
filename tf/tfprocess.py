@@ -102,7 +102,7 @@ class TFProcess:
             tf.reduce_mean(tf.squared_difference(self.z_, self.z_conv))
 
         # Regularizer
-        regularizer = tf.contrib.layers.l2_regularizer(scale=0.0001)
+        regularizer = tf.contrib.layers.l2_regularizer(scale=0.)
         reg_variables = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         self.reg_term = \
             tf.contrib.layers.apply_regularization(regularizer, reg_variables)
