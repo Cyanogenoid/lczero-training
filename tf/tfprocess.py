@@ -84,32 +84,50 @@ class TFProcess:
         self.train_handle = self.session.run(train_iterator.string_handle())
         self.test_handle = self.session.run(test_iterator.string_handle())
         self.init_net(self.next_batch)
-        self.replace_weights(self.teacher_net.get_weights(), weight_vars=self.teacher_weights)
+        for teacher, weights in zip(self.teacher_nets, self.teacher_weights):
+            self.replace_weights(teacher.get_weights(), weight_vars=weights)
 
     def init_net(self, next_batch):
         self.x = next_batch[0]  # tf.placeholder(tf.float32, [None, 112, 8*8])
         self.y_ = next_batch[1] # tf.placeholder(tf.float32, [None, 1858])
         self.z_ = next_batch[2] # tf.placeholder(tf.float32, [None, 1])
 
-        net = Net()
-        net.parse_proto(self.cfg['training']['teacher_path'])
-        self.teacher_net = net
+        if not isinstance(self.cfg['training']['teacher_path'], list):
+            self.cfg['training']['teacher_path'] = [self.cfg['training']['teacher_path']]
 
-        student_filters, self.RESIDUAL_FILTERS = self.RESIDUAL_FILTERS, net.filters()
-        student_blocks, self.RESIDUAL_BLOCKS = self.RESIDUAL_BLOCKS, net.blocks()
+        self.teacher_nets = []
+        self.teacher_weights = []
+        teacher_ys = []
+        teacher_zs = []
+        for i, teacher_path in enumerate(self.cfg['training']['teacher_path']):
+            net = Net()
+            net.parse_proto(teacher_path)
+            self.teacher_nets.append(net)
 
-        self.batch_norm_count = 0
-        with tf.variable_scope('teacher'):
-            self.distill_phase = 'teacher'
-            self.y_teacher, self.z_teacher = self.construct_net(self.x)
-            self.y_teacher = tf.stop_gradient(tf.nn.softmax(self.y_teacher / self.cfg['training']['teacher_temp']))
-            self.z_teacher = tf.stop_gradient(self.z_teacher)
-        trainable_vars = tf.get_collection_ref(tf.GraphKeys.TRAINABLE_VARIABLES)
-        del trainable_vars[:]
+            student_filters, self.RESIDUAL_FILTERS = self.RESIDUAL_FILTERS, net.filters()
+            student_blocks, self.RESIDUAL_BLOCKS = self.RESIDUAL_BLOCKS, net.blocks()
 
-        self.RESIDUAL_FILTERS = student_filters
-        self.RESIDUAL_BLOCKS = student_blocks
-        self.teacher_weights, self.weights = self.weights, []
+            self.batch_norm_count = 0
+            with tf.variable_scope('teacher{}'.format(i)):
+                self.distill_phase = 'teacher'
+                y_teacher, z_teacher = self.construct_net(self.x)
+                y_teacher = tf.stop_gradient(tf.nn.softmax(y_teacher / self.cfg['training']['teacher_temp']))
+                z_teacher = tf.stop_gradient(z_teacher)
+                teacher_ys.append(y_teacher)
+                teacher_zs.append(z_teacher)
+
+            trainable_vars = tf.get_collection_ref(tf.GraphKeys.TRAINABLE_VARIABLES)
+            del trainable_vars[:]
+
+            self.RESIDUAL_FILTERS = student_filters
+            self.RESIDUAL_BLOCKS = student_blocks
+
+            self.teacher_weights.append(self.weights)
+            self.weights = []
+
+        self.y_teacher = tf.reduce_mean(teacher_ys, 0)
+        self.z_teacher = tf.reduce_mean(teacher_zs, 0)
+
         self.batch_norm_count = 0
         with tf.variable_scope('student'):
             self.distill_phase = 'student'
