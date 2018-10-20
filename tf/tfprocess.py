@@ -430,7 +430,7 @@ class TFProcess:
 
         return scale
 
-    def conv_block(self, inputs, filter_size, input_channels, output_channels):
+    def conv_block(self, inputs, filter_size, input_channels, output_channels, first=False):
         # The weights are internal to the batchnorm layer, so apply
         # a unique scope that we can store, and use to look them back up
         # later on.
@@ -440,14 +440,15 @@ class TFProcess:
                                   input_channels, output_channels], name=conv_key)
 
         with tf.variable_scope(weight_key):
-            h_bn = \
+            h_conv = \
                 tf.layers.batch_normalization(
                     conv2d(inputs, W_conv),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=True,
                     virtual_batch_size=64,
                     training=self.training)
-        h_conv = tf.nn.relu(h_bn)
+            if not first:
+                h_conv = tf.nn.relu(h_conv)
 
         gamma_key = weight_key + "/batch_normalization/gamma:0"
         beta_key = weight_key + "/batch_normalization/beta:0"
@@ -467,41 +468,55 @@ class TFProcess:
 
         return h_conv
 
-    def residual_block(self, inputs, channels):
+    def residual_block(self, inputs, channels, bottleneck_channels):
         # First convnet
         orig = tf.identity(inputs)
         weight_key_1 = self.get_batchnorm_key()
         conv_key_1 = weight_key_1 + "/conv_weight"
-        W_conv_1 = weight_variable([3, 3, channels, channels], name=conv_key_1)
+        W_conv_1 = weight_variable([1, 1, channels, bottleneck_channels], name=conv_key_1)
 
         # Second convnet
         weight_key_2 = self.get_batchnorm_key()
         conv_key_2 = weight_key_2 + "/conv_weight"
-        W_conv_2 = weight_variable([3, 3, channels, channels], name=conv_key_2)
+        W_conv_2 = weight_variable([3, 3, bottleneck_channels, bottleneck_channels], name=conv_key_2)
+
+        # Third convnet
+        weight_key_3 = self.get_batchnorm_key()
+        conv_key_3 = weight_key_3 + "/conv_weight"
+        W_conv_3 = weight_variable([1, 1, bottleneck_channels, channels], name=conv_key_2)
 
         with tf.variable_scope(weight_key_1):
-            h_out_1 = \
+            h_bn1 = \
                     conv2d(tf.nn.relu(tf.layers.batch_normalization(inputs,
                     epsilon=1e-5, axis=1, fused=True,
-                    center=True, scale=False,
+                    center=True, scale=True,
                     virtual_batch_size=64,
                     training=self.training)), W_conv_1)
         with tf.variable_scope(weight_key_2):
             h_bn2 = \
-                    conv2d(tf.nn.relu(tf.layers.batch_normalization(h_out_1,
+                    conv2d(tf.nn.relu(tf.layers.batch_normalization(h_bn1,
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=True,
                     virtual_batch_size=64,
                     training=self.training)), W_conv_2)
+        with tf.variable_scope(weight_key_3):
+            h_bn3 = \
+                    conv2d(tf.nn.relu(tf.layers.batch_normalization(h_bn2,
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=True,
+                    virtual_batch_size=64,
+                    training=self.training)), W_conv_3)
 
-        with tf.variable_scope(weight_key_2):
-            h_se = self.squeeze_excitation(h_bn2, channels, self.SE_ratio)
-        h_out_2 = tf.add(h_se, orig)
+        with tf.variable_scope(weight_key_3):
+            h_se = self.squeeze_excitation(h_bn3, channels, self.SE_ratio)
+        h_out_3 = tf.add(h_se, orig)
 
+        gamma_key_1 = weight_key_1 + "/batch_normalization/gamma:0"
         beta_key_1 = weight_key_1 + "/batch_normalization/beta:0"
         mean_key_1 = weight_key_1 + "/batch_normalization/moving_mean:0"
         var_key_1 = weight_key_1 + "/batch_normalization/moving_variance:0"
 
+        gamma_1 = tf.get_default_graph().get_tensor_by_name(gamma_key_1)
         beta_1 = tf.get_default_graph().get_tensor_by_name(beta_key_1)
         mean_1 = tf.get_default_graph().get_tensor_by_name(mean_key_1)
         var_1 = tf.get_default_graph().get_tensor_by_name(var_key_1)
@@ -516,7 +531,18 @@ class TFProcess:
         mean_2 = tf.get_default_graph().get_tensor_by_name(mean_key_2)
         var_2 = tf.get_default_graph().get_tensor_by_name(var_key_2)
 
+        gamma_key_3 = weight_key_3 + "/batch_normalization/gamma:0"
+        beta_key_3 = weight_key_3 + "/batch_normalization/beta:0"
+        mean_key_3 = weight_key_3 + "/batch_normalization/moving_mean:0"
+        var_key_3 = weight_key_3 + "/batch_normalization/moving_variance:0"
+
+        gamma_3 = tf.get_default_graph().get_tensor_by_name(gamma_key_3)
+        beta_3 = tf.get_default_graph().get_tensor_by_name(beta_key_3)
+        mean_3 = tf.get_default_graph().get_tensor_by_name(mean_key_3)
+        var_3 = tf.get_default_graph().get_tensor_by_name(var_key_3)
+
         self.weights.append(W_conv_1)
+        self.weights.append(gamma_1)
         self.weights.append(beta_1)
         self.weights.append(mean_1)
         self.weights.append(var_1)
@@ -527,7 +553,13 @@ class TFProcess:
         self.weights.append(mean_2)
         self.weights.append(var_2)
 
-        return h_out_2
+        self.weights.append(W_conv_3)
+        self.weights.append(gamma_3)
+        self.weights.append(beta_3)
+        self.weights.append(mean_3)
+        self.weights.append(var_3)
+
+        return h_out_3
 
     def construct_net(self, planes):
         # NCHW format
@@ -537,10 +569,10 @@ class TFProcess:
         # Input convolution
         flow = self.conv_block(x_planes, filter_size=3,
                                input_channels=112,
-                               output_channels=self.RESIDUAL_FILTERS)
+                               output_channels=self.RESIDUAL_FILTERS, first=True)
         # Residual tower
         for _ in range(0, self.RESIDUAL_BLOCKS):
-            flow = self.residual_block(flow, self.RESIDUAL_FILTERS)
+            flow = self.residual_block(flow, self.RESIDUAL_FILTERS, self.RESIDUAL_FILTERS // 4)
 
         # Policy head
         conv_pol = self.conv_block(flow, filter_size=1,
