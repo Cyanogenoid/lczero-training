@@ -114,7 +114,7 @@ class TFProcess:
 
             self.batch_norm_count = 0
             with tf.variable_scope('teacher{}'.format(i)):
-                self.distill_phase = 'teacher'
+                self.distill_phase = 'teacher{}'.format(i)
                 y_teacher, z_teacher = self.construct_net(self.x)
                 y_teacher = tf.stop_gradient(tf.nn.softmax(y_teacher / self.cfg['training']['teacher_temp']))
                 z_teacher = tf.stop_gradient(z_teacher)
