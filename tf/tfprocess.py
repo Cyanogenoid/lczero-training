@@ -62,6 +62,7 @@ class TFProcess:
         # Network structure
         self.RESIDUAL_FILTERS = self.cfg['model']['filters']
         self.RESIDUAL_BLOCKS = self.cfg['model']['residual_blocks']
+        self.START_FILTERS = self.cfg['model']['start_filters']
 
         # For exporting
         self.weights = []
@@ -538,7 +539,7 @@ class TFProcess:
         self.batch_norm_count += 1
         return result
 
-    def conv_block(self, inputs, filter_size, input_channels, output_channels):
+    def conv_block(self, inputs, filter_size, input_channels, output_channels, first=False):
         # The weights are internal to the batchnorm layer, so apply
         # a unique scope that we can store, and use to look them back up
         # later on.
@@ -555,7 +556,10 @@ class TFProcess:
                     center=True, scale=False,
                     virtual_batch_size=64,
                     training=self.training)
-        h_conv = tf.nn.relu(h_bn)
+        if not first:
+            h_conv = tf.nn.relu(h_bn)
+        else:
+            h_conv = h_bn
 
         beta_key = weight_key + "/batch_normalization/beta:0"
         mean_key = weight_key + "/batch_normalization/moving_mean:0"
@@ -631,22 +635,112 @@ class TFProcess:
 
         return h_out_2
 
+    def dense_block(self, inputs, input_channels, channels):
+        # First convnet
+        orig = tf.identity(inputs)
+        weight_key_1 = self.get_batchnorm_key()
+        conv_key_1 = weight_key_1 + "/conv_weight"
+        W_conv_1 = weight_variable([1, 1, input_channels, 4 * channels], name=conv_key_1)
+
+        # Second convnet
+        weight_key_2 = self.get_batchnorm_key()
+        conv_key_2 = weight_key_2 + "/conv_weight"
+        W_conv_2 = weight_variable([3, 3, 4 * channels, channels], name=conv_key_2)
+
+        with tf.variable_scope(weight_key_1):
+            h_bn1 = tf.nn.relu(tf.layers.batch_normalization(inputs,
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=True,
+                    virtual_batch_size=64,
+                    training=self.training))
+            h_bn1 = conv2d(h_bn1, W_conv_1)
+        with tf.variable_scope(weight_key_2):
+            h_bn2 = tf.nn.relu(tf.layers.batch_normalization(h_bn1,
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=True,
+                    virtual_batch_size=64,
+                    training=self.training))
+            h_bn2 = conv2d(h_bn2, W_conv_2)
+        h_out_2 = tf.concat([orig, h_bn2], 1)
+
+        beta_key_1 = weight_key_1 + "/batch_normalization/beta:0"
+        mean_key_1 = weight_key_1 + "/batch_normalization/moving_mean:0"
+        var_key_1 = weight_key_1 + "/batch_normalization/moving_variance:0"
+
+        beta_1 = tf.get_default_graph().get_tensor_by_name(beta_key_1)
+        mean_1 = tf.get_default_graph().get_tensor_by_name(mean_key_1)
+        var_1 = tf.get_default_graph().get_tensor_by_name(var_key_1)
+
+        beta_key_2 = weight_key_2 + "/batch_normalization/beta:0"
+        mean_key_2 = weight_key_2 + "/batch_normalization/moving_mean:0"
+        var_key_2 = weight_key_2 + "/batch_normalization/moving_variance:0"
+
+        beta_2 = tf.get_default_graph().get_tensor_by_name(beta_key_2)
+        mean_2 = tf.get_default_graph().get_tensor_by_name(mean_key_2)
+        var_2 = tf.get_default_graph().get_tensor_by_name(var_key_2)
+
+        self.weights.append(W_conv_1)
+        self.weights.append(beta_1)
+        self.weights.append(mean_1)
+        self.weights.append(var_1)
+
+        self.weights.append(W_conv_2)
+        self.weights.append(beta_2)
+        self.weights.append(mean_2)
+        self.weights.append(var_2)
+
+        return h_out_2
+
+    def transition_block(self, inputs, input_channels):
+        # First convnet
+        weight_key_1 = self.get_batchnorm_key()
+        conv_key_1 = weight_key_1 + "/conv_weight"
+        W_conv_1 = weight_variable([1, 1, input_channels, input_channels // 2], name=conv_key_1)
+
+        with tf.variable_scope(weight_key_1):
+            h_bn1 = tf.nn.relu(tf.layers.batch_normalization(inputs,
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=True,
+                    virtual_batch_size=64,
+                    training=self.training))
+            h_bn1 = conv2d(h_bn1, W_conv_1)
+
+        beta_key_1 = weight_key_1 + "/batch_normalization/beta:0"
+        mean_key_1 = weight_key_1 + "/batch_normalization/moving_mean:0"
+        var_key_1 = weight_key_1 + "/batch_normalization/moving_variance:0"
+
+        beta_1 = tf.get_default_graph().get_tensor_by_name(beta_key_1)
+        mean_1 = tf.get_default_graph().get_tensor_by_name(mean_key_1)
+        var_1 = tf.get_default_graph().get_tensor_by_name(var_key_1)
+
+        self.weights.append(W_conv_1)
+        self.weights.append(beta_1)
+        self.weights.append(mean_1)
+        self.weights.append(var_1)
+        return h_bn1
+
     def construct_net(self, planes):
         # NCHW format
         # batch, 112 input channels, 8 x 8
         x_planes = tf.reshape(planes, [-1, 112, 8, 8])
 
+        current_channels = self.START_FILTERS
         # Input convolution
         flow = self.conv_block(x_planes, filter_size=3,
                                input_channels=112,
-                               output_channels=self.RESIDUAL_FILTERS)
+                               output_channels=current_channels, first=True)
+
         # Residual tower
-        for _ in range(0, self.RESIDUAL_BLOCKS):
-            flow = self.residual_block(flow, self.RESIDUAL_FILTERS)
+        for i in range(0, self.RESIDUAL_BLOCKS//2):
+            if i in {6, 6+12}:
+                flow = self.transition_block(flow, current_channels)
+                current_channels //= 2
+            flow = self.dense_block(flow, current_channels, self.RESIDUAL_FILTERS)
+            current_channels += self.RESIDUAL_FILTERS
 
         # Policy head
         conv_pol = self.conv_block(flow, filter_size=1,
-                                   input_channels=self.RESIDUAL_FILTERS,
+                                   input_channels=current_channels,
                                    output_channels=32)
         h_conv_pol_flat = tf.reshape(conv_pol, [-1, 32*8*8])
         W_fc1 = weight_variable([32*8*8, 1858], name='fc1/weight')
@@ -657,7 +751,7 @@ class TFProcess:
 
         # Value head
         conv_val = self.conv_block(flow, filter_size=1,
-                                   input_channels=self.RESIDUAL_FILTERS,
+                                   input_channels=current_channels,
                                    output_channels=32)
         h_conv_val_flat = tf.reshape(conv_val, [-1, 32*8*8])
         W_fc2 = weight_variable([32 * 8 * 8, 128], name='fc2/weight')
