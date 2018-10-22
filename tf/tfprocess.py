@@ -260,9 +260,12 @@ class TFProcess:
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
             # being equal to the value the end of a run is stored against.
+            '''
             self.calculate_test_summaries(test_batches, steps + 1)
             if self.swa_enabled:
                 self.calculate_swa_summaries(test_batches, steps + 1)
+                '''
+            pass
 
         # Make sure that ghost batch norm can be applied
         if batch_size % 64 != 0:
@@ -640,12 +643,7 @@ class TFProcess:
         orig = tf.identity(inputs)
         weight_key_1 = self.get_batchnorm_key()
         conv_key_1 = weight_key_1 + "/conv_weight"
-        W_conv_1 = weight_variable([1, 1, input_channels, 4 * channels], name=conv_key_1)
-
-        # Second convnet
-        weight_key_2 = self.get_batchnorm_key()
-        conv_key_2 = weight_key_2 + "/conv_weight"
-        W_conv_2 = weight_variable([3, 3, 4 * channels, channels], name=conv_key_2)
+        W_conv_1 = weight_variable([3, 3, input_channels, channels], name=conv_key_1)
 
         with tf.variable_scope(weight_key_1):
             h_bn1 = tf.nn.relu(tf.layers.batch_normalization(inputs,
@@ -654,14 +652,7 @@ class TFProcess:
                     virtual_batch_size=64,
                     training=self.training))
             h_bn1 = conv2d(h_bn1, W_conv_1)
-        with tf.variable_scope(weight_key_2):
-            h_bn2 = tf.nn.relu(tf.layers.batch_normalization(h_bn1,
-                    epsilon=1e-5, axis=1, fused=True,
-                    center=True, scale=True,
-                    virtual_batch_size=64,
-                    training=self.training))
-            h_bn2 = conv2d(h_bn2, W_conv_2)
-        h_out_2 = tf.concat([orig, h_bn2], 1)
+        h_out_2 = tf.concat([orig, h_bn1], 1)
 
         beta_key_1 = weight_key_1 + "/batch_normalization/beta:0"
         mean_key_1 = weight_key_1 + "/batch_normalization/moving_mean:0"
@@ -671,23 +662,10 @@ class TFProcess:
         mean_1 = tf.get_default_graph().get_tensor_by_name(mean_key_1)
         var_1 = tf.get_default_graph().get_tensor_by_name(var_key_1)
 
-        beta_key_2 = weight_key_2 + "/batch_normalization/beta:0"
-        mean_key_2 = weight_key_2 + "/batch_normalization/moving_mean:0"
-        var_key_2 = weight_key_2 + "/batch_normalization/moving_variance:0"
-
-        beta_2 = tf.get_default_graph().get_tensor_by_name(beta_key_2)
-        mean_2 = tf.get_default_graph().get_tensor_by_name(mean_key_2)
-        var_2 = tf.get_default_graph().get_tensor_by_name(var_key_2)
-
         self.weights.append(W_conv_1)
         self.weights.append(beta_1)
         self.weights.append(mean_1)
         self.weights.append(var_1)
-
-        self.weights.append(W_conv_2)
-        self.weights.append(beta_2)
-        self.weights.append(mean_2)
-        self.weights.append(var_2)
 
         return h_out_2
 
