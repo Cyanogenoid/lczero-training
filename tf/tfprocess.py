@@ -56,18 +56,11 @@ def conv2d(x, W, groups=1):
     else:
         # W :: [w, h, group_size, out]
         # W :: [w, h, group_size, groups, group_size]
-        w_shape = W.shape.as_list()
-        group_size = w_shape[2]
-        W = tf.reshape(W, w_shape[:2] + [group_size, groups, group_size])
-        W = tf.transpose(W, perm=[0, 1, 3, 2, 4])
-        W = tf.reshape(W, w_shape[:2] + [groups * group_size, group_size])
-        x = tf.nn.depthwise_conv2d_native(x, W, data_format='NCHW', strides=[1,1,1,1], padding='SAME')
-        shape = x.shape.as_list()
-        x = tf.reshape(x, [shape[0], groups, group_size, group_size] + shape[2:])
-        x = tf.reduce_sum(x, axis=2)
-        x = tf.reshape(x, [shape[0], -1] + shape[2:])
-        # tf.reshape(W, W.shape[:2] + groups + group size, group size
-        return x
+        ys = []
+        for xx, w in zip(tf.split(x, groups, axis=1), tf.split(W, groups, axis=3)):
+            y = conv2d(xx, w)
+            ys.append(y)
+        return tf.concat(ys, axis=1)
 
 class TFProcess:
     def __init__(self, cfg):
@@ -593,21 +586,26 @@ class TFProcess:
         return h_conv
 
     def residual_block(self, inputs, channels):
+        bottleneck = channels // 4
         # First convnet
         orig = tf.identity(inputs)
         weight_key_1 = self.get_batchnorm_key()
         conv_key_1 = weight_key_1 + "/conv_weight"
-        W_conv_1 = weight_variable([3, 3, channels//self.CARDINALITY, channels], name=conv_key_1)
+        W_conv_1 = weight_variable([1, 1, channels, bottleneck], name=conv_key_1)
 
         # Second convnet
         weight_key_2 = self.get_batchnorm_key()
         conv_key_2 = weight_key_2 + "/conv_weight"
-        W_conv_2 = weight_variable([3, 3, channels//self.CARDINALITY, channels], name=conv_key_2)
+        W_conv_2 = weight_variable([3, 3, bottleneck, bottleneck], name=conv_key_2)
+
+        weight_key_3 = self.get_batchnorm_key()
+        conv_key_3 = weight_key_3 + "/conv_weight"
+        W_conv_3 = weight_variable([1, 1, bottleneck, channels], name=conv_key_3)
 
         with tf.variable_scope(weight_key_1):
             h_bn1 = \
                 tf.layers.batch_normalization(
-                    conv2d(inputs, W_conv_1, self.CARDINALITY),
+                    conv2d(inputs, W_conv_1),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
@@ -616,12 +614,21 @@ class TFProcess:
         with tf.variable_scope(weight_key_2):
             h_bn2 = \
                 tf.layers.batch_normalization(
-                    conv2d(h_out_1, W_conv_2, self.CARDINALITY),
+                    conv2d(h_out_1, W_conv_2),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
                     training=self.training)
-        h_out_2 = tf.nn.relu(tf.add(h_bn2, orig))
+        h_out_2 = tf.nn.relu(h_bn2)
+        with tf.variable_scope(weight_key_3):
+            h_bn3 = \
+                tf.layers.batch_normalization(
+                    conv2d(h_out_2, W_conv_3),
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=False,
+                    virtual_batch_size=64,
+                    training=self.training)
+        h_out_3 = tf.nn.relu(tf.add(h_bn3, orig))
 
         beta_key_1 = weight_key_1 + "/batch_normalization/beta:0"
         mean_key_1 = weight_key_1 + "/batch_normalization/moving_mean:0"
@@ -649,7 +656,7 @@ class TFProcess:
         self.weights.append(mean_2)
         self.weights.append(var_2)
 
-        return h_out_2
+        return h_out_3
 
     def construct_net(self, planes):
         # NCHW format
