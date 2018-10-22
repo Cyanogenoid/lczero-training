@@ -49,9 +49,25 @@ def bias_variable(shape, name=None):
     initial = tf.constant(0.0, shape=shape)
     return tf.Variable(initial, name=name)
 
-def conv2d(x, W):
-    return tf.nn.conv2d(x, W, data_format='NCHW',
-                        strides=[1, 1, 1, 1], padding='SAME')
+def conv2d(x, W, groups=1):
+    if groups == 1:
+        return tf.nn.conv2d(x, W, data_format='NCHW',
+                            strides=[1, 1, 1, 1], padding='SAME')
+    else:
+        # W :: [w, h, group_size, out]
+        # W :: [w, h, group_size, groups, group_size]
+        w_shape = W.shape.as_list()
+        group_size = w_shape[2]
+        W = tf.reshape(W, w_shape[:2] + [group_size, groups, group_size])
+        W = tf.transpose(W, perm=[0, 1, 3, 2, 4])
+        W = tf.reshape(W, w_shape[:2] + [groups * group_size, group_size])
+        x = tf.nn.depthwise_conv2d_native(x, W, data_format='NCHW', strides=[1,1,1,1], padding='SAME')
+        shape = x.shape.as_list()
+        x = tf.reshape(x, [shape[0], groups, group_size, group_size] + shape[2:])
+        x = tf.reduce_sum(x, axis=2)
+        x = tf.reshape(x, [shape[0], -1] + shape[2:])
+        # tf.reshape(W, W.shape[:2] + groups + group size, group size
+        return x
 
 class TFProcess:
     def __init__(self, cfg):
@@ -62,6 +78,7 @@ class TFProcess:
         # Network structure
         self.RESIDUAL_FILTERS = self.cfg['model']['filters']
         self.RESIDUAL_BLOCKS = self.cfg['model']['residual_blocks']
+        self.CARDINALITY= self.cfg['model']['cardinality']
 
         # For exporting
         self.weights = []
@@ -259,9 +276,12 @@ class TFProcess:
         if steps % self.cfg['training']['total_steps'] == 0:
             # Steps is given as one higher than current in order to avoid it
             # being equal to the value the end of a run is stored against.
+            '''
             self.calculate_test_summaries(test_batches, steps + 1)
             if self.swa_enabled:
                 self.calculate_swa_summaries(test_batches, steps + 1)
+                '''
+            pass
 
         # Make sure that ghost batch norm can be applied
         if batch_size % 64 != 0:
@@ -577,17 +597,17 @@ class TFProcess:
         orig = tf.identity(inputs)
         weight_key_1 = self.get_batchnorm_key()
         conv_key_1 = weight_key_1 + "/conv_weight"
-        W_conv_1 = weight_variable([3, 3, channels, channels], name=conv_key_1)
+        W_conv_1 = weight_variable([3, 3, channels//self.CARDINALITY, channels], name=conv_key_1)
 
         # Second convnet
         weight_key_2 = self.get_batchnorm_key()
         conv_key_2 = weight_key_2 + "/conv_weight"
-        W_conv_2 = weight_variable([3, 3, channels, channels], name=conv_key_2)
+        W_conv_2 = weight_variable([3, 3, channels//self.CARDINALITY, channels], name=conv_key_2)
 
         with tf.variable_scope(weight_key_1):
             h_bn1 = \
                 tf.layers.batch_normalization(
-                    conv2d(inputs, W_conv_1),
+                    conv2d(inputs, W_conv_1, self.CARDINALITY),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
@@ -596,7 +616,7 @@ class TFProcess:
         with tf.variable_scope(weight_key_2):
             h_bn2 = \
                 tf.layers.batch_normalization(
-                    conv2d(h_out_1, W_conv_2),
+                    conv2d(h_out_1, W_conv_2, self.CARDINALITY),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
