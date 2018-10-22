@@ -709,8 +709,8 @@ class TFProcess:
                                output_channels=current_channels, first=True)
 
         # Residual tower
-        for i in range(0, self.RESIDUAL_BLOCKS//2):
-            if i in {6, 6+12}:
+        for i in range(0, self.RESIDUAL_BLOCKS):
+            if i in {8}:
                 flow = self.transition_block(flow, current_channels)
                 current_channels //= 2
             flow = self.dense_block(flow, current_channels, self.RESIDUAL_FILTERS)
