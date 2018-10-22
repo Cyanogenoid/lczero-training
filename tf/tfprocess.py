@@ -233,6 +233,7 @@ class TFProcess:
     def replace_weights(self, new_weights, weight_vars=None):
         if not weight_vars:
             weight_vars = self.weights
+        ops = []
         for e, weights in enumerate(weight_vars):
             if weights.name.endswith('/batch_normalization/beta:0'):
                 # Batch norm beta is written as bias before the batch normalization
@@ -241,7 +242,7 @@ class TFProcess:
                 # Weight file order: bias, means, variances
                 var = tf.constant(new_weights[e + 2], shape=weights.shape)
                 new_beta = tf.divide(bias, tf.sqrt(var + tf.constant(1e-5)))
-                self.session.run(tf.assign(weights, new_beta))
+                ops.append(tf.assign(weights, new_beta))
             elif weights.shape.ndims == 4:
                 # Rescale rule50 related weights as clients do not normalize the input.
                 if e == 0:
@@ -262,7 +263,7 @@ class TFProcess:
                 s = weights.shape.as_list()
                 shape = [s[i] for i in [3, 2, 0, 1]]
                 new_weight = tf.constant(new_weights[e], shape=shape)
-                self.session.run(weights.assign(tf.transpose(new_weight, [2, 3, 1, 0])))
+                ops.append(weights.assign(tf.transpose(new_weight, [2, 3, 1, 0])))
             elif weights.shape.ndims == 2:
                 # Fully connected layers are [in, out] in TF
                 #
@@ -271,11 +272,12 @@ class TFProcess:
                 s = weights.shape.as_list()
                 shape = [s[i] for i in [1, 0]]
                 new_weight = tf.constant(new_weights[e], shape=shape)
-                self.session.run(weights.assign(tf.transpose(new_weight, [1, 0])))
+                ops.append(weights.assign(tf.transpose(new_weight, [1, 0])))
             else:
                 # Biases, batchnorm etc
                 new_weight = tf.constant(new_weights[e], shape=weights.shape)
-                self.session.run(tf.assign(weights, new_weight))
+                ops.append(tf.assign(weights, new_weight))
+        self.session.run(ops)
         #This should result in identical file to the starting one
         #self.save_leelaz_weights('restored.txt')
 
