@@ -658,14 +658,14 @@ class TFProcess:
         # Value head
         conv_val = self.conv_block(flow, filter_size=1,
                                    input_channels=self.RESIDUAL_FILTERS,
-                                   output_channels=32)
-        h_conv_val_flat = tf.reshape(conv_val, [-1, 32*8*8])
-        W_fc2 = weight_variable([32 * 8 * 8, 128], name='fc2/weight')
-        b_fc2 = bias_variable([128], name='fc2/bias')
+                                   output_channels=128)
+        h_conv_val_flat = tf.reshape(conv_val, [-1, 128*8*8])
+        W_fc2 = weight_variable([128 * 8 * 8, 512], name='fc2/weight')
+        b_fc2 = bias_variable([512], name='fc2/bias')
         self.weights.append(W_fc2)
         self.weights.append(b_fc2)
         h_fc2 = tf.nn.relu(tf.add(tf.matmul(h_conv_val_flat, W_fc2), b_fc2))
-        W_fc3 = weight_variable([128, 1], name='fc3/weight')
+        W_fc3 = weight_variable([512, 1], name='fc3/weight')
         b_fc3 = bias_variable([1], name='fc3/bias')
         self.weights.append(W_fc3)
         self.weights.append(b_fc3)
