@@ -94,7 +94,7 @@ class TFProcess:
 
         self.y_ = tf.nn.softmax(5 * self.y_ - (1.0 - self.legal_) * 100000)  # put non-zero probability on all legal moves
         asdf = self.y_conv
-        self.y_conv = tf.cond(self.training, lambda: asdf - (1.0 - self.legal_) * 1000000.0, lambda: asdf)  # mask away illegal moves
+        self.y_conv = tf.cond(self.training, lambda: asdf, lambda: asdf - (1.0 - self.legal_) * 1000000.0)  # mask away illegal moves
 
         # Calculate loss on policy head
         cross_entropy = \
