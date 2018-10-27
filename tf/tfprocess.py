@@ -92,6 +92,7 @@ class TFProcess:
         self.batch_norm_count = 0
         self.y_conv, self.z_conv = self.construct_net(self.x)
 
+        self.y_ = tf.nn.softmax(5 * self.y_ - (1.0 - self.legal_) * 100000)  # put non-zero probability on all legal moves
         self.y_conv = self.y_conv - (1.0 - self.legal_) * 1000000.0  # mask away illegal moves
 
         # Calculate loss on policy head
