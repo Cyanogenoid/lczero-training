@@ -637,7 +637,7 @@ class TFProcess:
         x_planes = tf.reshape(planes, [-1, 112, 8, 8])
 
         # Input convolution
-        flow = self.conv_block(x_planes, filter_size=3,
+        flow = self.conv_block(x_planes, filter_size=5,
                                input_channels=112,
                                output_channels=self.RESIDUAL_FILTERS)
         # Residual tower
