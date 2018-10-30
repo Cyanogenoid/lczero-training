@@ -573,16 +573,23 @@ class TFProcess:
         return h_conv
 
     def residual_block(self, inputs, channels):
+        bottleneck = channels // 4
+
         # First convnet
         orig = tf.identity(inputs)
         weight_key_1 = self.get_batchnorm_key()
         conv_key_1 = weight_key_1 + "/conv_weight"
-        W_conv_1 = weight_variable([3, 3, channels, channels], name=conv_key_1)
+        W_conv_1 = weight_variable([1, 1, channels, bottleneck], name=conv_key_1)
 
         # Second convnet
         weight_key_2 = self.get_batchnorm_key()
         conv_key_2 = weight_key_2 + "/conv_weight"
-        W_conv_2 = weight_variable([3, 3, channels, channels], name=conv_key_2)
+        W_conv_2 = weight_variable([3, 3, bottleneck, bottleneck], name=conv_key_2)
+
+        # Third convnet
+        weight_key_3 = self.get_batchnorm_key()
+        conv_key_3 = weight_key_3 + "/conv_weight"
+        W_conv_3 = weight_variable([1, 1, bottleneck, channels], name=conv_key_3)
 
         with tf.variable_scope(weight_key_1):
             h_bn1 = \
@@ -597,6 +604,15 @@ class TFProcess:
             h_bn2 = \
                 tf.layers.batch_normalization(
                     conv2d(h_out_1, W_conv_2),
+                    epsilon=1e-5, axis=1, fused=True,
+                    center=True, scale=False,
+                    virtual_batch_size=64,
+                    training=self.training)
+        h_out_1 = tf.nn.relu(h_bn2)
+        with tf.variable_scope(weight_key_3):
+            h_bn2 = \
+                tf.layers.batch_normalization(
+                    conv2d(h_out_1, W_conv_3),
                     epsilon=1e-5, axis=1, fused=True,
                     center=True, scale=False,
                     virtual_batch_size=64,
@@ -619,6 +635,14 @@ class TFProcess:
         mean_2 = tf.get_default_graph().get_tensor_by_name(mean_key_2)
         var_2 = tf.get_default_graph().get_tensor_by_name(var_key_2)
 
+        beta_key_3 = weight_key_2 + "/batch_normalization/beta:0"
+        mean_key_3 = weight_key_2 + "/batch_normalization/moving_mean:0"
+        var_key_3 = weight_key_2 + "/batch_normalization/moving_variance:0"
+
+        beta_3 = tf.get_default_graph().get_tensor_by_name(beta_key_3)
+        mean_3 = tf.get_default_graph().get_tensor_by_name(mean_key_3)
+        var_3 = tf.get_default_graph().get_tensor_by_name(var_key_3)
+
         self.weights.append(W_conv_1)
         self.weights.append(beta_1)
         self.weights.append(mean_1)
@@ -628,6 +652,11 @@ class TFProcess:
         self.weights.append(beta_2)
         self.weights.append(mean_2)
         self.weights.append(var_2)
+
+        self.weights.append(W_conv_3)
+        self.weights.append(beta_3)
+        self.weights.append(mean_3)
+        self.weights.append(var_3)
 
         return h_out_2
 
