@@ -532,7 +532,11 @@ class TFProcess:
         assert channels % ratio == 0
 
         # NCHW format reduced to NC
-        net = tf.reduce_mean(x, axis=[2, 3])
+        #net = tf.reduce_mean(x, axis=[2, 3])
+        gather_weights = weight_variable([8, 8, channels, 1])
+        self.weights.append(gather_weights)
+        net = tf.nn.depthwise_conv2d_native(x, gather_weights, [1, 1, 1, 1], 'VALID', data_format='NCHW')
+        net = tf.reshape(net, [-1, channels])
 
         W_fc1 = weight_variable([channels, channels // ratio], name='se_fc1_w')
         b_fc1 = bias_variable([channels // ratio], name='se_fc1_b')
