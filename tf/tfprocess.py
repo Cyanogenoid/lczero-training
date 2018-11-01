@@ -546,11 +546,19 @@ class TFProcess:
         self.weights.append(W_fc2)
         self.weights.append(b_fc2)
 
-        net = tf.nn.sigmoid(tf.add(tf.matmul(net, W_fc2), b_fc2))
+        W_fc3 = weight_variable([channels // ratio, channels], name='se_fc3_w')
+        b_fc3 = bias_variable([channels], name='se_fc3_b')
+        self.weights.append(W_fc3)
+        self.weights.append(b_fc3)
+
+        net_orig = net
+        net = tf.nn.sigmoid(tf.add(tf.matmul(net_orig, W_fc2), b_fc2))
+        shift = tf.add(tf.matmul(net_orig, W_fc3), b_fc3)
 
         net = tf.reshape(net, [-1, channels, 1, 1])
+        shift = tf.reshape(shift, [-1, channels, 1, 1])
 
-        scale = x * net
+        scale = x * net + shift
 
         return scale
 
