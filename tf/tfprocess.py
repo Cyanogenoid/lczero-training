@@ -661,10 +661,16 @@ class TFProcess:
                                    output_channels=32)
         h_conv_val_flat = tf.reshape(conv_val, [-1, 32*8*8])
         W_fc2 = weight_variable([32 * 8 * 8, 128], name='fc2/weight')
-        b_fc2 = bias_variable([128], name='fc2/bias')
         self.weights.append(W_fc2)
-        self.weights.append(b_fc2)
-        h_fc2 = tf.nn.relu(tf.add(tf.matmul(h_conv_val_flat, W_fc2), b_fc2))
+        x = tf.matmul(h_conv_val_flat, W_fc2)
+        x = tf.layers.batch_normalization(
+            x,
+            epsilon=1e-5, axis=1, fused=True,
+            center=True, scale=True,
+            virtual_batch_size=64,
+            training=self.training,
+        )
+        h_fc2 = tf.nn.relu(x)
         W_fc3 = weight_variable([128, 1], name='fc3/weight')
         b_fc3 = bias_variable([1], name='fc3/bias')
         self.weights.append(W_fc3)
