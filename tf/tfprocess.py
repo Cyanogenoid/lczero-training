@@ -552,7 +552,7 @@ class TFProcess:
         self.weights.append(b_fc3)
 
         net_orig = net
-        net = tf.nn.sigmoid(tf.add(tf.matmul(net_orig, W_fc2), b_fc2))
+        net = tf.add(tf.matmul(net_orig, W_fc2), b_fc2)
         shift = tf.add(tf.matmul(net_orig, W_fc3), b_fc3)
 
         net = tf.reshape(net, [-1, channels, 1, 1])
