@@ -39,6 +39,10 @@ class Net(nn.Module):
     def conv_and_linear_weights(self):
         return [m.weight for m in self.modules() if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear)]
 
+    def from_checkpoint(self, path):
+        checkpoint = torch.load(path)
+        self.load_state_dict(checkpoint['weights'])
+
 
 class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):

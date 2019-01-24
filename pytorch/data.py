@@ -9,6 +9,16 @@ import torch.utils.data as data
 import numpy as np
 
 
+def v3_loader(path, batch_size, num_workers=8):
+    return data.DataLoader(
+        V3(Folder(path)),
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+
 class V3(data.Dataset):
     def __init__(self, dataset):
         self.dataset = dataset
