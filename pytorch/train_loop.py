@@ -23,7 +23,6 @@ class Session():
         self.optimizer = optim.SGD(self.net.parameters(), lr=cfg['training']['lr'], momentum=0.9, nesterov=True)
 
         print('Constructing data loaders...')
-        # Construct data loaders
         batch_size = cfg['training']['batch_size']
         self.train_loader = data.v3_loader(cfg['dataset']['train_path'], batch_size)
         self.test_loader = data.v3_loader(cfg['dataset']['test_path'], batch_size)
@@ -52,7 +51,7 @@ class Session():
                 continue
             self.total_step += 1
             # TODO write tensorboard info
-            print(self.total_step, self.metric('policy_loss'))
+            print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'))
             self.reset_metrics()
 
             if self.step_is_multiple(self.cfg['training']['test_every']):
