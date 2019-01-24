@@ -41,7 +41,7 @@ class Net(nn.Module):
 
     def from_checkpoint(self, path):
         checkpoint = torch.load(path)
-        self.load_state_dict(checkpoint['weights'])
+        self.load_state_dict(checkpoint['net'])
 
 
 class PolicyHead(nn.Module):

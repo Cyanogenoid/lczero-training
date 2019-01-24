@@ -9,14 +9,20 @@ import torch.utils.data as data
 import numpy as np
 
 
-def v3_loader(path, batch_size, num_workers=8):
-    return data.DataLoader(
+def v3_loader(path, batch_size, num_workers=8, infinite=True):
+    loader = data.DataLoader(
         V3(Folder(path)),
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
         pin_memory=True,
     )
+    if infinite:
+        def loop(l):
+            while True:
+                yield from l
+        loader = loop(loader)
+    return loader
 
 
 class V3(data.Dataset):
@@ -38,6 +44,8 @@ class V3(data.Dataset):
         planes = torch.cat([planes, flat_planes], dim=0)
 
         probs = torch.from_numpy(np.frombuffer(probs, dtype=np.float32))
+
+        winner = np.float32(winner)
         
         return planes, probs, winner
 
@@ -52,7 +60,7 @@ class Folder(data.Dataset):
 
     def find_files(self, path):
         files = glob.glob(path)
-        files = [f for f in files if os.path.getsize(f) > 0]
+#        files = [f for f in files if os.path.getsize(f) > 0]
         return files
 
     def __getitem__(self, i):
