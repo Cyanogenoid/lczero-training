@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 
+import net
+
 
 class Net(nn.Module):
     def __init__(self, residual_channels, residual_blocks, policy_channels, se_ratio):
@@ -43,6 +45,12 @@ class Net(nn.Module):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['net'])
 
+    def export_weights(self, path):
+        weights = [w.detach().cpu().numpy() for w in extract_weights(self)]
+        proto = net.Net()
+        proto.fill_net(weights, se=True)
+        proto.save_proto(path)
+
 
 class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):
@@ -76,7 +84,6 @@ class ValueHead(nn.Module):
         x = x.tanh()
         return x
 
-
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
         super().__init__()
@@ -108,7 +115,7 @@ class ConvBlock(nn.Module):
         super().__init__()
 
         self.layers = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding),
+            nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
@@ -161,6 +168,41 @@ class GhostBatchNorm2d(nn.Module):
         x = self.bn(x)
         return x
 '''
+
+
+def extract_weights(m):
+    if isinstance(m, Net):
+        yield from extract_weights(m.input_conv)
+        for block in m.residual_stack:
+            yield from extract_weights(block)
+        yield from extract_weights(m.policy_head)
+        yield from extract_weights(m.value_head)
+
+    elif type(m) in {ConvBlock, PolicyHead, ValueHead, ResidualBlock, SqueezeExcitation}:
+        yield from extract_weights(m.layers)
+
+    elif isinstance(m, nn.Sequential):
+        for layer in m:
+            yield from extract_weights(layer)
+
+    elif isinstance(m, nn.Conv2d):
+        yield m.weight
+        # no convs with biases in this net, only here for completeness
+        if m.bias is not None:
+            yield m.bias
+
+    elif isinstance(m, nn.BatchNorm2d):
+        yield m.weight
+        yield m.bias
+        yield m.running_mean
+        yield m.running_var
+
+    elif isinstance(m, nn.Linear):
+        yield m.weight
+        yield m.bias
+
+    else:
+        yield from ()
 
 if __name__ == '__main__':
     net = Net(256, 20, 80, 4)
