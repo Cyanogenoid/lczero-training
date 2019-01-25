@@ -12,6 +12,7 @@ from tensorboardX import SummaryWriter
 
 import data
 import model
+from lr import create_lr_schedule
 
 
 class Session():
@@ -29,7 +30,10 @@ class Session():
             se_ratio=cfg['model']['se_ratio'],
         ).cuda()
         self.net = nn.DataParallel(self.net)  # multi-gpu
-        self.optimizer = optim.SGD(self.net.parameters(), lr=cfg['training']['lr'], momentum=0.9, nesterov=True)
+        self.optimizer = optim.SGD(self.net.parameters(), lr=1, momentum=0.9, nesterov=True)
+        schedule, steps = create_lr_schedule(cfg['training']['lr'])
+        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, schedule)
+        print(f'Scheduled LR for {steps} steps')
 
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
@@ -105,6 +109,7 @@ class Session():
                 split_loss.backward()
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
         self.metrics['gradient_norm'].append(gradient_norm)
+        self.lr_scheduler.step(self.total_step)
         self.optimizer.step()
         self.optimizer.zero_grad()
 
@@ -176,7 +181,7 @@ class Session():
         filename = f'checkpoint-{self.total_step}.pth'
         path = os.path.join(directory, filename)
         torch.save(checkpoint, path)
-        print(f'Checkpoint saved to "{path}".')
+        print(f'Checkpoint saved to "{path}"')
         # store path so that we know what checkpoint to resume from without specifying it
         with open(os.path.join(directory, 'latest'), 'w') as fd:
             fd.write(f'{path}\n')
@@ -188,6 +193,7 @@ class Session():
         writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.total_step)
         writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.total_step)
         writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.total_step)
+        writer.add_scalar('LR', self.lr_scheduler.get_lr()[0], global_step=self.total_step)
         self.reset_metrics()
 
     def metric(self, key):
