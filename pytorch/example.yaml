@@ -12,7 +12,22 @@ training:
     batch_size: 2048
     batch_splits: 4
 
-    lr: 0.01
+    lr:
+        # warmup
+        - type: linear
+          steps: 10
+          start: 0.0
+          end: 0.1
+        # stepped lr
+        - type: constant
+          steps: 20
+          at: 0.1
+        - type: constant
+          steps: 20
+          at: 0.01
+        - type: constant
+          steps: 20
+          at: 0.001
     policy_weight: 1.0
     value_weight: 1.0
     reg_weight: 1.e-4
