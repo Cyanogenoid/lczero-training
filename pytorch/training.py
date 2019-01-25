@@ -152,11 +152,11 @@ class Session():
                 path = fd.read().strip()
         if not os.path.exists(path):
             raise OSError('"{}" does not exist.')
+        print(f'Resuming from "{path}"...')
         checkpoint = torch.load(path)
         self.net.module.load_state_dict(checkpoint['net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.total_step = checkpoint['total_step']
-        print(f'Resuming from "{path}".')
 
     def checkpoint(self):
         checkpoint = {
