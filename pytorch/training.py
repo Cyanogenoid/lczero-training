@@ -1,9 +1,11 @@
 import collections
+import os
 
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
+from tensorboardX import SummaryWriter
 
 import data
 import model
@@ -31,9 +33,13 @@ class Session():
         # use self.metric(key) to access, since these are results of possibly multiple virtual batches
         self.metrics = collections.defaultdict(list)
 
+        # SummaryWriters to save metrics for tensorboard to display
+        run_path = os.path.join(cfg['logging']['directory'], cfg['name'])
+        self.train_writer = SummaryWriter(f'{run_path}-train')
+        self.test_writer = SummaryWriter(f'{run_path}-test')
+
         self.total_step = 0
 
-        # TODO tensorboardX
         # TODO gradient accumulation
         # TODO grad clipping
         # TODO swa
@@ -41,7 +47,7 @@ class Session():
 
     def train_loop(self):
         print('Starting training...')
-        if self.step_is_multiple(self.cfg['training']['test_every']) and self.total_step > 0:
+        if self.step_is_multiple(self.cfg['logging']['test_every']) and self.total_step > 0:
             self.test_epoch()
 
         for batch in self.train_loader:
@@ -50,11 +56,11 @@ class Session():
             if not done:
                 continue
             self.total_step += 1
-            # TODO write tensorboard info
-            print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'))
+            #print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'))
+            self.log_metrics(self.train_writer)
             self.reset_metrics()
 
-            if self.step_is_multiple(self.cfg['training']['test_every']):
+            if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
             if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
                 self.checkpoint()
@@ -70,9 +76,9 @@ class Session():
         with torch.no_grad():
             for i, batch in enumerate(self.train_loader):
                 self.forward(batch)
-                if i >= self.cfg['training']['test_steps']:
+                if i >= self.cfg['logging']['test_steps']:
                     break
-        # TODO tensorboard
+        self.log_metrics(self.test_writer)
         self.reset_metrics()
         self.net.train()
 
@@ -102,8 +108,8 @@ class Session():
         policy, value = self.net(input_planes)
 
         # Compute losses
-        policy_logits = F.log_softmax(policy)
-        policy_loss = F.kl_div(policy_logits, policy_target)  # this has the same gradient as cross-entropy
+        policy_logits = F.log_softmax(policy, dim=1)
+        policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
         value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
         flat_weights = torch.cat([w.view(-1) for w in self.net.conv_and_linear_weights()])
         reg_loss = flat_weights.dot(flat_weights)
@@ -118,13 +124,12 @@ class Session():
             policy_target_entropy = (policy_target * policy_target.log()).sum(dim=1).mean()
 
         # store the metrics so that other functions have access to them
-        # detach so that computation graph doesn't live longer than expected
-        self.metrics['policy_loss'].append(policy_loss.detach())
-        self.metrics['value_loss'].append(value_loss.detach())
-        self.metrics['reg_loss'].append(reg_loss.detach())
-        self.metrics['total_loss'].append(total_loss.detach())
-        self.metrics['policy_accuracy'].append(policy_accuracy.detach())
-        self.metrics['policy_target_entropy'].append(policy_target_entropy.detach())
+        self.metrics['policy_loss'].append(policy_loss.item())
+        self.metrics['value_loss'].append(value_loss.item())
+        self.metrics['reg_loss'].append(reg_loss.item())
+        self.metrics['total_loss'].append(total_loss.item())
+        self.metrics['policy_accuracy'].append(policy_accuracy.item())
+        self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
 
         return total_loss
 
@@ -145,6 +150,14 @@ class Session():
             'total_step': self.total_steps,
         }
         torch.save(checkpoint, path)
+
+    def log_metrics(self, writer):
+        writer.add_scalar('Losses/Policy', self.metric('policy_loss'), global_step=self.total_step)
+        writer.add_scalar('Losses/Value', self.metric('value_loss'), global_step=self.total_step)
+        writer.add_scalar('Losses/Weight', self.metric('reg_loss'), global_step=self.total_step)
+        writer.add_scalar('Losses/Total', self.metric('total_loss'), global_step=self.total_step)
+        writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.total_step)
+        self.reset_metrics()
 
     def metric(self, key):
         return np.mean(self.metrics[key])

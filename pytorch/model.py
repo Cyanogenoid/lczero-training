@@ -164,5 +164,9 @@ class GhostBatchNorm2d(nn.Module):
 
 if __name__ == '__main__':
     net = Net(256, 20, 80, 4)
-    batch = torch.rand(4, 112, 8, 8)
+    batch = torch.rand(1, 112, 8, 8)
     policy, value = net(batch)
+
+    from tensorboardX import SummaryWriter
+    with SummaryWriter() as w:
+        w.add_graph(net, batch, verbose=False)

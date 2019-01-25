@@ -9,19 +9,22 @@ dataset:
 
 training:
     total_steps: 200_000
-    batch_size: 128
+    batch_size: 1024
 
-    lr: 0.1
+    lr: 0.01
     policy_weight: 1.0
     value_weight: 1.0
     reg_weight: 0.0001
 
     checkpoint_every: 1000
-    test_steps: 100
-    test_every: 100    
 
 model:
     residual_channels: 256
     residual_blocks: 20
     policy_channels: 80
     se_ratio: 4
+
+logging:
+    directory: 'runs'
+    test_steps: 100
+    test_every: 100
