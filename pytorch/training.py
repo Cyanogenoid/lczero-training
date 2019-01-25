@@ -153,8 +153,8 @@ class Session():
 
     def log_metrics(self, writer):
         writer.add_scalar('Losses/Policy', self.metric('policy_loss'), global_step=self.total_step)
-        writer.add_scalar('Losses/Value', self.metric('value_loss'), global_step=self.total_step)
-        writer.add_scalar('Losses/Weight', self.metric('reg_loss'), global_step=self.total_step)
+        writer.add_scalar('Losses/Value', self.metric('value_loss') / 4, global_step=self.total_step)
+        writer.add_scalar('Losses/Weight', self.metric('reg_loss') * 1e-4, global_step=self.total_step)
         writer.add_scalar('Losses/Total', self.metric('total_loss'), global_step=self.total_step)
         writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.total_step)
         self.reset_metrics()
