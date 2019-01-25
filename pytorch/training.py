@@ -31,9 +31,9 @@ class Session():
         ).cuda()
         self.net = nn.DataParallel(self.net)  # multi-gpu
         self.optimizer = optim.SGD(self.net.parameters(), lr=1, momentum=0.9, nesterov=True)
-        schedule, steps = create_lr_schedule(cfg['training']['lr'])
-        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, schedule)
-        print(f'Scheduled LR for {steps} steps')
+        lr_schedule, lr_steps = create_lr_schedule(cfg['training']['lr'])
+        self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_schedule)
+        print(f'Scheduled LR for {lr_steps} steps')
 
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
@@ -50,7 +50,7 @@ class Session():
         self.train_writer = SummaryWriter(f'{run_path}-train')
         self.test_writer = SummaryWriter(f'{run_path}-test')
 
-        self.total_step = 0
+        self.step = 0
 
         # TODO grad clipping
         # TODO swa
@@ -58,17 +58,17 @@ class Session():
 
     def train_loop(self):
         print('Training...')
-        if self.step_is_multiple(self.cfg['logging']['test_every']) and self.total_step > 0:
+        if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
             self.test_epoch()
 
         for batch in self.train_loader:
             t0 = time.perf_counter()
 
             self.train_step(batch)
-            self.total_step += 1
+            self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
 
             t1 = time.perf_counter()
-            print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
+            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
             self.log_metrics(self.train_writer)
             self.reset_metrics()
 
@@ -109,7 +109,7 @@ class Session():
                 split_loss.backward()
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
         self.metrics['gradient_norm'].append(gradient_norm)
-        self.lr_scheduler.step(self.total_step)
+        self.lr_scheduler.step(self.step)
         self.optimizer.step()
         self.optimizer.zero_grad()
 
@@ -162,23 +162,23 @@ class Session():
         checkpoint = torch.load(path)
         self.net.module.load_state_dict(checkpoint['net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.total_step = checkpoint['total_step']
+        self.step = checkpoint['step']
 
     def checkpoint(self):
         checkpoint = {
             'net': self.net.module.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-            'total_step': self.total_step,
+            'step': self.step,
         }
         directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
         if not os.path.exists(directory):
             os.makedirs(directory)
         # proto weights
-        filename = f'net-{self.total_step}.pb.gz'
+        filename = f'net-{self.step}.pb.gz'
         path = os.path.join(directory, filename)
         self.net.module.export_weights(path)
         # checkpoint
-        filename = f'checkpoint-{self.total_step}.pth'
+        filename = f'checkpoint-{self.step}.pth'
         path = os.path.join(directory, filename)
         torch.save(checkpoint, path)
         print(f'Checkpoint saved to "{path}"')
@@ -187,13 +187,13 @@ class Session():
             fd.write(f'{path}\n')
 
     def log_metrics(self, writer):
-        writer.add_scalar('Loss/Policy', self.metric('policy_loss'), global_step=self.total_step)
-        writer.add_scalar('Loss/Value', self.metric('value_loss') / 4, global_step=self.total_step)
-        writer.add_scalar('Loss/Weight', self.metric('reg_loss') * 1e-4, global_step=self.total_step)
-        writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.total_step)
-        writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.total_step)
-        writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.total_step)
-        writer.add_scalar('LR', self.lr_scheduler.get_lr()[0], global_step=self.total_step)
+        writer.add_scalar('Loss/Policy', self.metric('policy_loss'), global_step=self.step)
+        writer.add_scalar('Loss/Value', self.metric('value_loss') / 4, global_step=self.step)
+        writer.add_scalar('Loss/Weight', self.metric('reg_loss') * 1e-4, global_step=self.step)
+        writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.step)
+        writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.step)
+        writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.step)
+        writer.add_scalar('LR', self.lr_scheduler.get_lr()[0], global_step=self.step)
         self.reset_metrics()
 
     def metric(self, key):
@@ -204,4 +204,4 @@ class Session():
             self.metrics[key] = []
 
     def step_is_multiple(self, factor):
-        return self.total_step % factor == 0
+        return self.step % factor == 0
