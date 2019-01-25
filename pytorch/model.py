@@ -58,6 +58,12 @@ class Net(nn.Module):
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
             model_weight[:] = torch.from_numpy(loaded_weight)
 
+    def export_onnx(self, path):
+        dummy_input = torch.randn(10, 112, 8, 8)
+        input_names = ['input_planes']
+        output_names = [ 'policy_output', 'value_output']
+        torch.onnx.export(self, dummy_input, path, input_names=input_names, output_names=output_names, verbose=True)
+
 
 class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):
@@ -215,7 +221,3 @@ if __name__ == '__main__':
     net = Net(256, 20, 80, 4)
     batch = torch.rand(1, 112, 8, 8)
     policy, value = net(batch)
-
-    from tensorboardX import SummaryWriter
-    with SummaryWriter() as w:
-        w.add_graph(net, batch, verbose=False)
