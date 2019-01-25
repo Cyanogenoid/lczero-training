@@ -97,6 +97,7 @@ class ValueHead(nn.Module):
         x = x.tanh()
         return x
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
         super().__init__()
