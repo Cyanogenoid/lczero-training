@@ -47,7 +47,6 @@ class Session():
 
         self.total_step = 0
 
-        # TODO gradient accumulation
         # TODO grad clipping
         # TODO swa
         # TODO protobuf weights in net
