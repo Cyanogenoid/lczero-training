@@ -89,7 +89,7 @@ class Session():
         with torch.no_grad():
             for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
-                if i >= self.cfg['logging']['test_steps']:
+                if i >= self.cfg['logging']['test_steps'] * self.cfg['training']['batch_splits']:
                     break
         self.log_metrics(self.test_writer)
         self.reset_metrics()
