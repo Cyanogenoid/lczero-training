@@ -20,6 +20,7 @@ training:
     max_gradient_norm: 2
 
     checkpoint_every: 1000
+    checkpoint_directory: 'checkpoints'
 
 model:
     residual_channels: 256

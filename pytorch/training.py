@@ -60,8 +60,8 @@ class Session():
             t0 = time.perf_counter()
 
             self.train_step(batch)
-            # only consider step as done when gradient has been accumulated enough times
             self.total_step += 1
+
             t1 = time.perf_counter()
             print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
             self.log_metrics(self.train_writer)
@@ -145,27 +145,32 @@ class Session():
 
         return total_loss
 
-    def resume(self, path):
-        # Unpack net from DataParallel if necessary
-        net = self.net
-        if isinstance(net, nn.DataParallel):
-            net = net.module
+    def resume(self, path=None):
+        if path is None:
+            directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
+            with open(os.path.join(directory, 'latest'), 'r') as fd:
+                path = fd.read().strip()
         checkpoint = torch.load(path)
-        net.load_state_dict(checkpoint['net'])
+        self.net.module.load_state_dict(checkpoint['net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.total_step = checkpoint['total_steps']
 
-    def checkpoint(self, path):
-        # Unpack net from DataParallel if necessary
-        net = self.net
-        if isinstance(net, nn.DataParallel):
-            net = net.module
+    def checkpoint(self):
         checkpoint = {
-            'net': net.state_dict(),
+            'net': self.net.module.state_dict(),
             'optimizer': self.optimizer.state_dict(),
-            'total_step': self.total_steps,
+            'total_step': self.total_step,
         }
+        directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        filename = f'checkpoint-{self.total_step}.pth'
+        path = os.path.join(directory, filename)
         torch.save(checkpoint, path)
+        print(f'Checkpoint saved to "{path}"')
+        # store path so that we know what checkpoint to resume from without specifying it
+        with open(os.path.join(directory, 'latest'), 'w') as fd:
+            fd.write(f'{path}\n')
 
     def log_metrics(self, writer):
         writer.add_scalar('Loss/Policy', self.metric('policy_loss'), global_step=self.total_step)
