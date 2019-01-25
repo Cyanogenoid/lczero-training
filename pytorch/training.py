@@ -100,8 +100,10 @@ class Session():
         else:
             splits = [torch.FloatTensor.chunk(x, self.cfg['training']['batch_splits']) for x in batch]
             for split in zip(*splits):
-                total_loss = self.forward(split) / len(splits)
-                total_loss.backward()
+                split_loss = self.forward(split) / len(splits)
+                split_loss.backward()
+        gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
+        self.metrics['gradient_norm'].append(gradient_norm)
         self.optimizer.step()
         self.optimizer.zero_grad()
 
@@ -121,7 +123,7 @@ class Session():
         policy_logits = F.log_softmax(policy, dim=1)
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
         value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
-        flat_weights = torch.cat([w.view(-1) for w in self.net.module.conv_and_linear_weights()])
+        flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights)
         total_loss = \
             self.cfg['training']['policy_weight'] * policy_loss + \
@@ -171,6 +173,7 @@ class Session():
         writer.add_scalar('Loss/Weight', self.metric('reg_loss') * 1e-4, global_step=self.total_step)
         writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.total_step)
         writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.total_step)
+        writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.total_step)
         self.reset_metrics()
 
     def metric(self, key):

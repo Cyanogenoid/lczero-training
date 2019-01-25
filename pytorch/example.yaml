@@ -17,6 +17,8 @@ training:
     value_weight: 1.0
     reg_weight: 1.e-4
 
+    max_gradient_norm: 2
+
     checkpoint_every: 1000
 
 model:
