@@ -2,6 +2,7 @@ import collections
 import os
 
 import torch
+import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
@@ -112,7 +113,7 @@ class Session():
         policy_logits = F.log_softmax(policy, dim=1)
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
         value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
-        flat_weights = torch.cat([w.view(-1) for w in self.net.conv_and_linear_weights()])
+        flat_weights = torch.cat([w.view(-1) for w in self.net.module.conv_and_linear_weights()])
         reg_loss = flat_weights.dot(flat_weights)
         total_loss = \
             self.cfg['training']['policy_weight'] * policy_loss + \
@@ -135,8 +136,12 @@ class Session():
         return total_loss
 
     def resume(self, path):
+        # Unpack net from DataParallel if necessary
+        net = self.net
+        if isinstance(net, nn.DataParallel):
+            net = net.module
         checkpoint = torch.load(path)
-        self.net.load_state_dict(checkpoint['net'])
+        net.load_state_dict(checkpoint['net'])
         self.optimizer.load_state_dict(checkpoint['optimizer'])
         self.total_step = checkpoint['total_steps']
 

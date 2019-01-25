@@ -9,7 +9,7 @@ dataset:
 
 training:
     total_steps: 200_000
-    batch_size: 1024
+    batch_size: 2048
 
     lr: 0.01
     policy_weight: 1.0
