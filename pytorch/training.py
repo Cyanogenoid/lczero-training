@@ -22,6 +22,7 @@ class Session():
             policy_channels=cfg['model']['policy_channels'],
             se_ratio=cfg['model']['se_ratio'],
         ).cuda()
+        self.net = nn.DataParallel(self.net)  # multi-gpu
         self.optimizer = optim.SGD(self.net.parameters(), lr=cfg['training']['lr'], momentum=0.9, nesterov=True)
 
         print('Constructing data loaders...')
@@ -46,7 +47,7 @@ class Session():
         # TODO protobuf weights in net
 
     def train_loop(self):
-        print('Starting training...')
+        print('Training...')
         if self.step_is_multiple(self.cfg['logging']['test_every']) and self.total_step > 0:
             self.test_epoch()
 
