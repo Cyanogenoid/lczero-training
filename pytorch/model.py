@@ -186,6 +186,7 @@ def extract_weights(m):
             yield from extract_weights(layer)
 
     elif isinstance(m, nn.Conv2d):
+        # PyTorch uses same weight layout as cuDNN, so no transposes needed
         yield m.weight
         # no convs with biases in this net, only here for completeness
         if m.bias is not None:
@@ -198,6 +199,7 @@ def extract_weights(m):
         yield m.running_var
 
     elif isinstance(m, nn.Linear):
+        # PyTorch uses same weight layout as cuDNN, so no transposes needed
         yield m.weight
         yield m.bias
 
