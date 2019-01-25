@@ -20,6 +20,6 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch pipeline for training Leela Chess')
     parser.add_argument('--cfg', type=argparse.FileType('r'), required=True, help='yaml configuration with training parameters')
-    parser.add_argument('--resume-from', type=argparse.FileType('r'), help='Override which checkpoint to resume from')
+    parser.add_argument('--resume-from', type=str, help='Override which checkpoint to resume from')
 
     main(parser.parse_args())

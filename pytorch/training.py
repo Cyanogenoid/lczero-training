@@ -168,15 +168,15 @@ class Session():
         directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
         if not os.path.exists(directory):
             os.makedirs(directory)
+        # proto weights
+        filename = f'net-{self.total_step}.pb.gz'
+        path = os.path.join(directory, filename)
+        self.net.module.export_weights(path)
         # checkpoint
         filename = f'checkpoint-{self.total_step}.pth'
         path = os.path.join(directory, filename)
         torch.save(checkpoint, path)
         print(f'Checkpoint saved to "{path}".')
-        # proto weights
-        filename = f'net-{self.total_step}.pb.gz'
-        path = os.path.join(directory, filename)
-        self.net.module.export_weights(path)
         # store path so that we know what checkpoint to resume from without specifying it
         with open(os.path.join(directory, 'latest'), 'w') as fd:
             fd.write(f'{path}\n')

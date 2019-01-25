@@ -201,8 +201,6 @@ def extract_weights(m):
         yield m.weight
         yield m.bias
 
-    else:
-        yield from ()
 
 if __name__ == '__main__':
     net = Net(256, 20, 80, 4)
