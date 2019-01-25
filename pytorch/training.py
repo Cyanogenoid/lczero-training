@@ -1,4 +1,5 @@
 import collections
+import time
 import os
 
 import torch
@@ -15,6 +16,9 @@ import model
 class Session():
     def __init__(self, cfg):
         self.cfg = cfg
+
+        # let cudnn find the best algorithm
+        torch.backends.cudnn.benchmark = True
 
         print('Building net...')
         self.net = model.Net(
@@ -53,12 +57,15 @@ class Session():
             self.test_epoch()
 
         for batch in self.train_loader:
+            t0 = time.perf_counter()
+
             done = self.train_step(batch)
             # only consider step as done when gradient has been accumulated enough times
             if not done:
                 continue
             self.total_step += 1
-            #print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'))
+            t1 = time.perf_counter()
+            print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
             self.log_metrics(self.train_writer)
             self.reset_metrics()
 
@@ -69,6 +76,9 @@ class Session():
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
                 break
+            t2 = time.perf_counter()
+            print(t2-t1)
+
         # only need to save end-of-training checkpoint if we haven't just checkpointed
         if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
             self.checkpoint()
