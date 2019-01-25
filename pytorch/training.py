@@ -33,7 +33,8 @@ class Session():
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
         self.train_loader = data.v3_loader(cfg['dataset']['train_path'], batch_size)
-        self.test_loader = data.v3_loader(cfg['dataset']['test_path'], batch_size)
+        # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
+        self.test_loader = data.v3_loader(cfg['dataset']['test_path'], batch_size // cfg['training']['batch_splits'])
 
         # place to store and accumulate per-batch metrics
         # use self.metric(key) to access, since these are results of possibly multiple virtual batches
