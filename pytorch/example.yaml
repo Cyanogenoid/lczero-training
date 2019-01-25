@@ -10,6 +10,7 @@ dataset:
 training:
     total_steps: 200_000
     batch_size: 2048
+    batch_splits: 4
 
     lr: 0.01
     policy_weight: 1.0
@@ -19,8 +20,8 @@ training:
     checkpoint_every: 1000
 
 model:
-    residual_channels: 128
-    residual_blocks: 10
+    residual_channels: 256
+    residual_blocks: 20
     policy_channels: 80
     se_ratio: 4
 

@@ -59,10 +59,8 @@ class Session():
         for batch in self.train_loader:
             t0 = time.perf_counter()
 
-            done = self.train_step(batch)
+            self.train_step(batch)
             # only consider step as done when gradient has been accumulated enough times
-            if not done:
-                continue
             self.total_step += 1
             t1 = time.perf_counter()
             print(self.total_step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
@@ -86,7 +84,7 @@ class Session():
     def test_epoch(self):
         self.net.eval()
         with torch.no_grad():
-            for i, batch in enumerate(self.train_loader):
+            for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
                 if i >= self.cfg['logging']['test_steps']:
                     break
@@ -96,16 +94,16 @@ class Session():
 
     def train_step(self, batch):
         self.net.train()
-        total_loss = self.forward(batch)
-
-        total_loss.backward()
-        if True:  # TODO gradient accumulation condition here
-            self.optimizer.step()
-            self.optimizer.zero_grad()
-            return True
+        if self.cfg['training']['batch_splits'] == 1:
+            total_loss = self.forward(batch)
+            total_loss.backward()
         else:
-            # gradient accumulation not done yet
-            return False
+            splits = [torch.FloatTensor.chunk(x, self.cfg['training']['batch_splits']) for x in batch]
+            for split in zip(*splits):
+                total_loss = self.forward(split) / len(splits)
+                total_loss.backward()
+        self.optimizer.step()
+        self.optimizer.zero_grad()
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation
