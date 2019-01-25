@@ -52,9 +52,7 @@ class Session():
 
         self.step = 0
 
-        # TODO grad clipping
         # TODO swa
-        # TODO protobuf weights in net
 
     def train_loop(self):
         print('Training...')
