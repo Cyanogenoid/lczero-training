@@ -174,7 +174,7 @@ class Session():
         # proto weights
         filename = f'net-{self.step}.pb.gz'
         path = os.path.join(directory, filename)
-        self.net.module.export_weights(path)
+        self.net.module.export_proto(path)
         # checkpoint
         filename = f'checkpoint-{self.step}.pth'
         path = os.path.join(directory, filename)

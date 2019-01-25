@@ -45,11 +45,18 @@ class Net(nn.Module):
         checkpoint = torch.load(path)
         self.load_state_dict(checkpoint['net'])
 
-    def export_weights(self, path):
+    def export_proto(self, path):
         weights = [w.detach().cpu().numpy() for w in extract_weights(self)]
         proto = net.Net()
         proto.fill_net(weights, se=True)
         proto.save_proto(path)
+
+    def import_proto(self, path):
+        proto = net.Net()
+        proto.parse_proto(path)
+        weights = proto.get_weights()
+        for model_weight, loaded_weight in zip(extract_weights(self), weights):
+            model_weight[:] = torch.from_numpy(loaded_weight)
 
 
 class PolicyHead(nn.Module):
