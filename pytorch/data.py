@@ -84,7 +84,7 @@ class PositionShuffler(data.Dataset):
         return 2**30
 
     def random_game(self):
-        index = random.randint(0, len(self.dataset))
+        index = random.randint(0, len(self.dataset) - 1)
         return self.dataset[index]
 
     def insert_many(self, positions):
