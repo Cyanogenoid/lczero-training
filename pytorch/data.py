@@ -9,7 +9,7 @@ import torch.utils.data as data
 import numpy as np
 
 
-def v3_loader(path, batch_size, num_workers=8, infinite=True):
+def v3_loader(path, batch_size, num_workers=16, infinite=True):
     loader = data.DataLoader(
         V3(Folder(path)),
         batch_size=batch_size,
