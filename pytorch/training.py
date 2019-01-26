@@ -12,6 +12,7 @@ from tensorboardX import SummaryWriter
 
 import data
 import model
+import checkpoint
 from lr import create_lr_schedule
 
 
@@ -89,7 +90,7 @@ class Session():
             if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
             if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
-                self.checkpoint()
+                checkpoint.save(self)
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
                 break
@@ -99,7 +100,7 @@ class Session():
 
         # only need to save end-of-training checkpoint if we haven't just checkpointed
         if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
-            self.checkpoint()
+            checkpoint.save(self)
 
     def test_epoch(self):
         self.net.eval()

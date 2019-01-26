@@ -3,6 +3,7 @@ import os
 import yaml
 
 import training
+import checkpoint
 
 
 def main(args):
@@ -11,7 +12,7 @@ def main(args):
 
     session = training.Session(cfg)
     try:
-        session.resume(args.resume_from)
+        checkpoint.resume(session, args.resume_from)
     except OSError as e:
         print('Warning: could not resume from latest checkpoint')
     session.train_loop() 
