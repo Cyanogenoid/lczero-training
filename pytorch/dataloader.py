@@ -71,8 +71,8 @@ class ShufflingDataLoader:
 
     def task(self, chunkdatasrc, writer):
         """
-        Run in fork'ed process, read data from chunkdatasrc, parsing, shuffling and
-        sending v3 data through pipe back to main process.
+        Run in fork'ed process, read data from chunkdatasrc
+        and send through pipe back to main process.
         """
         for item in chunkdatasrc:
             writer.send_bytes(item)
