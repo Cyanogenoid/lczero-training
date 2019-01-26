@@ -37,9 +37,23 @@ class Session():
 
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
-        self.train_loader = data.v3_loader(cfg['dataset']['train_path'], batch_size)
-        # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
-        self.test_loader = data.v3_loader(cfg['dataset']['test_path'], batch_size // cfg['training']['batch_splits'])
+
+        self.train_loader = data.v3_loader(
+            path=cfg['dataset']['train_path'],
+            batch_size=batch_size,
+            buffer_size=cfg['training']['shufflebuffer_size'],
+            positions_per_game=cfg['training']['positions_per_game'],
+        )
+        self.test_loader = data.v3_loader(
+            path=cfg['dataset']['test_path'],
+            # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
+            batch_size=batch_size // cfg['training']['batch_splits'],
+            buffer_size=cfg['training']['shufflebuffer_size'],
+            positions_per_game=cfg['training']['positions_per_game'],
+        )
+        print('Prefetching data...')
+        next(iter(self.train_loader))
+        next(iter(self.test_loader))
 
         # place to store and accumulate per-batch metrics
         # use self.metric(key) to access, since these are results of possibly multiple virtual batches
@@ -66,7 +80,7 @@ class Session():
             self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
 
             t1 = time.perf_counter()
-            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0))
+            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0), batch[0].size())
             self.log_metrics(self.train_writer)
             self.reset_metrics()
 
