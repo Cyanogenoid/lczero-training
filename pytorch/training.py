@@ -144,12 +144,11 @@ class Session():
         policy_logits = F.log_softmax(policy, dim=1)
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
         value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
-        flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
-        reg_loss = flat_weights.dot(flat_weights)
+        reg_loss = sum(w.view(-1).dot(w.view(-1)) / 2 for w in flat_weights)
         total_loss = \
             self.cfg['training']['policy_weight'] * policy_loss + \
             self.cfg['training']['value_weight'] * value_loss + \
-            self.cfg['training']['reg_weight'] * reg_loss 
+            self.cfg['training']['reg_weight'] * reg_loss
 
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
