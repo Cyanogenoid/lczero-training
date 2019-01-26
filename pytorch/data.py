@@ -23,7 +23,7 @@ def v3_loader(path, batch_size, positions_per_game, buffer_size, num_workers=Non
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        shuffle=True
+        shuffle=True,
         pin_memory=True,
         drop_last=True,
     )
