@@ -12,7 +12,7 @@ training:
     batch_size: 1024
     batch_splits: 1
 
-    shufflebuffer_size: 1_000_000
+    shufflebuffer_size: 250_000
     positions_per_game: 4
 
     lr:
