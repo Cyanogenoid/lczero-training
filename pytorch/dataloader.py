@@ -85,8 +85,7 @@ class ShufflingDataLoader:
         """
         sbuff = sb.ShuffleBuffer(self.struct_size, self.shuffle_size)
         while len(self.readers):
-            #for r in mp.connection.wait(self.readers):
-            for r in self.readers:
+            for r in mp.connection.wait(self.readers):
                 try:
                     s = r.recv_bytes()
                     s = sbuff.insert_or_replace(s)
