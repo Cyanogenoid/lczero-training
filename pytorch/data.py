@@ -76,7 +76,7 @@ class PositionShuffler(data.Dataset):
         while len(self.buffer) < self.buffer_size or len(self.queue) == 0:
             try:
                 self.insert_many(self.random_game())
-            except:
+            except OSError:
                 # just skip over broken files for now
                 pass
         return self.queue.pop(0)
@@ -88,6 +88,7 @@ class PositionShuffler(data.Dataset):
     def random_game(self):
         index = random.randint(0, len(self.dataset))
         positions = self.dataset[index]
+        return positions
 
     def insert_many(self, positions):
         for position in positions:
