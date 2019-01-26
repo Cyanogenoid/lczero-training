@@ -73,14 +73,16 @@ class Session():
         if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
             self.test_epoch()
 
+        t0 = time.perf_counter()
         for batch in self.train_loader:
-            t0 = time.perf_counter()
 
+            t1 = time.perf_counter()
             self.train_step(batch)
             self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
 
-            t1 = time.perf_counter()
-            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size(0)/(t1-t0), batch[0].size())
+            t2 = time.perf_counter()
+            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size())
+
             self.log_metrics(self.train_writer)
             self.reset_metrics()
 
@@ -91,8 +93,9 @@ class Session():
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
                 break
-            t2 = time.perf_counter()
-            print(t2-t1)
+            t3 = time.perf_counter()
+            print(batch[0].size(0)/(t2-t1), batch[0].size(0)/(t3-t0))
+            t0 = time.perf_counter()
 
         # only need to save end-of-training checkpoint if we haven't just checkpointed
         if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
