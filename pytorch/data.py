@@ -15,7 +15,7 @@ def v3_loader(path, batch_size, positions_per_game, buffer_size, num_workers=Non
     # load chunks from folder
     dataset = Folder(path, positions_per_game)
     # shuffle positions around to decorrelate positions from the same game
-    dataset = PositionShuffler(dataset, buffer_size=buffer_size)
+    dataset = PositionShuffler(dataset, buffer_size=buffer_size // num_workers)
     # parse V3 records
     dataset = V3(dataset)
     loader = data.DataLoader(
@@ -57,7 +57,7 @@ class V3(data.Dataset):
         return planes, probs, winner
 
     def __len__(self):
-        return 2**31
+        return len(self.dataset)
 
 
 class PositionShuffler(data.Dataset):
@@ -75,7 +75,8 @@ class PositionShuffler(data.Dataset):
         return self.queue.pop(0)
 
     def __len__(self):
-        return self.buffer_size
+        # doesn't have a proper length, since it retrieves random positions
+        return 2**31
 
     def random_game(self):
         index = random.randint(0, len(self.dataset))
