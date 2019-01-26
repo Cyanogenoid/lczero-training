@@ -14,15 +14,18 @@ def v3_loader(path, batch_size, positions_per_game, buffer_size, num_workers=Non
         num_workers = torch.multiprocessing.cpu_count()
     # load chunks from folder
     dataset = Folder(path, positions_per_game)
-    # shuffle positions around to decorrelate positions from the same game
-    dataset = PositionShuffler(dataset, buffer_size=buffer_size // num_workers)
+    if positions_per_game > 1:
+        # shuffle positions around to decorrelate positions from the same game
+        dataset = PositionShuffler(dataset, buffer_size=buffer_size // num_workers)
     # parse V3 records
     dataset = V3(dataset)
     loader = data.DataLoader(
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
+        shuffle=True
         pin_memory=True,
+        drop_last=True,
     )
     # make loader infinite
     def loop(iterable):
@@ -37,8 +40,8 @@ class V3(data.Dataset):
         self.dataset = dataset
         self.v3_struct = struct.Struct('4s7432s832sBBBBBBBb')
 
-    def __getitem__(self, _):
-        position = self.dataset[None]
+    def __getitem__(self, item):
+        position = self.dataset[item]
         ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner = self.v3_struct.unpack(position)
         move_count = 0
 
@@ -71,7 +74,11 @@ class PositionShuffler(data.Dataset):
         ''' Return a random position from a random game '''
         # insert positions as long as either buffer isn't full yet or the position queue is empty
         while len(self.buffer) < self.buffer_size or len(self.queue) == 0:
-            self.insert_many(self.random_game())
+            try:
+                self.insert_many(self.random_game())
+            except:
+                # just skip over broken files for now
+                pass
         return self.queue.pop(0)
 
     def __len__(self):
@@ -80,7 +87,7 @@ class PositionShuffler(data.Dataset):
 
     def random_game(self):
         index = random.randint(0, len(self.dataset))
-        return self.dataset[index]
+        positions = self.dataset[index]
 
     def insert_many(self, positions):
         for position in positions:
