@@ -24,6 +24,8 @@ def v3_loader(path, batch_size, positions_per_game, shufflebuffer_size, num_work
     loader = dataloader.ShufflingDataLoader(lambda: position_loader, shuffle_size=shufflebuffer_size, struct_size=V3_STRUCT.size)
     # parse v3 records into PyTorch tensors
     loader = map(parse_v3, loader)
+    # only include correctly parsed v3 records
+    loader = filter(lambda x: x is not None, loader)
     # group records into groups of size batch_size
     loader = grouper(loader, batch_size)
     # turn groups into PyTorch batches
@@ -47,7 +49,10 @@ def collate_positions(batch):
 
 
 def parse_v3(position):
-    ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner = V3_STRUCT.unpack(position)
+    try:
+        ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner = V3_STRUCT.unpack(position)
+    except:
+        return None
     move_count = 0
 
     planes = torch.from_numpy(np.unpackbits(np.frombuffer(planes, dtype=np.uint8)).astype(np.float32))
@@ -85,9 +90,13 @@ class Folder(data.Dataset):
 
     def __getitem__(self, i):
         path = self.files[i]
-        with gzip.open(path, 'rb') as fd:
-            chunk = fd.read()
-        return self.random_positions(chunk, n=self.positions_per_game)
+        try:
+            with gzip.open(path, 'rb') as fd:
+                chunk = fd.read()
+            return self.random_positions(chunk, n=self.positions_per_game)
+        except EOFError:
+            print('Skipping', path)
+            return []
 
     def random_positions(self, chunk, n=1):
         num_records = len(chunk) // self.record_size
@@ -99,10 +108,3 @@ class Folder(data.Dataset):
 
     def __len__(self):
         return len(self.files)
-
-
-if __name__ == '__main__':
-    d = V3(Folder('data/v3/train/*'))
-    for i in range(len(d)):
-        planes, probs, winner = d[i]
-        print(f'moves: {probs.nonzero().tolist()}, winner: {winner}')
