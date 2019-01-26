@@ -168,15 +168,16 @@ class Session():
         return total_loss
 
     def log_metrics(self, writer):
-        writer.add_scalar('Loss/Policy', self.metric('policy_loss'), global_step=self.step)
-        writer.add_scalar('Loss/Value', self.metric('value_loss'), global_step=self.step)
+        writer.add_scalar('loss/policy', self.metric('policy_loss'), global_step=self.step)
+        writer.add_scalar('Loss/value', self.metric('value_loss'), global_step=self.step)
         if writer == self.train_writer:
-            writer.add_scalar('Loss/Weight', self.metric('reg_loss'), global_step=self.step)
-        writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.step)
-        writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.step)
+            writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
+        writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
+        writer.add_scalar('metrics/policy_accuracy', self.metric('policy_accuracy'), global_step=self.step)
+        writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
         if writer == self.train_writer:
-            writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.step)
-            writer.add_scalar('LR', self.lr_scheduler.get_lr()[0], global_step=self.step)
+            writer.add_scalar('metrics/gradient_norm', self.metric('gradient_norm'), global_step=self.step)
+            writer.add_scalar('hyperparameter/learning_rate', self.lr_scheduler.get_lr()[0], global_step=self.step)
         self.reset_metrics()
 
     def metric(self, key):
