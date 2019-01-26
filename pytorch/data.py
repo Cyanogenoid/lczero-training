@@ -14,18 +14,16 @@ def v3_loader(path, batch_size, positions_per_game, buffer_size, num_workers=Non
         num_workers = torch.multiprocessing.cpu_count()
     # load chunks from folder
     dataset = Folder(path, positions_per_game)
-    if positions_per_game > 1:
-        # shuffle positions around to decorrelate positions from the same game
-        dataset = PositionShuffler(dataset, buffer_size=buffer_size // num_workers)
+    # shuffle positions around to decorrelate positions from the same game
+    dataset = PositionShuffler(dataset, buffer_size=buffer_size // num_workers)
     # parse V3 records
     dataset = V3(dataset)
     loader = data.DataLoader(
         dataset,
         batch_size=batch_size,
         num_workers=num_workers,
-        shuffle=True,
-        pin_memory=True,
         drop_last=True,
+        pin_memory=True,
     )
     # make loader infinite
     def loop(iterable):
@@ -83,12 +81,11 @@ class PositionShuffler(data.Dataset):
 
     def __len__(self):
         # doesn't have a proper length, since it retrieves random positions
-        return 2**31
+        return 2**30
 
     def random_game(self):
         index = random.randint(0, len(self.dataset))
-        positions = self.dataset[index]
-        return positions
+        return self.dataset[index]
 
     def insert_many(self, positions):
         for position in positions:
