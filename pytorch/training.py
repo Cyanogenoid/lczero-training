@@ -191,8 +191,8 @@ class Session():
             writer.add_scalar('Loss/Weight', self.metric('reg_loss') * 1e-4, global_step=self.step)
         writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.step)
         writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.step)
-        writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.step)
         if writer == self.train_writer:
+            writer.add_scalar('Gradient Norm', self.metric('gradient_norm'), global_step=self.step)
             writer.add_scalar('LR', self.lr_scheduler.get_lr()[0], global_step=self.step)
         self.reset_metrics()
 
