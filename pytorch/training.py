@@ -80,10 +80,9 @@ class Session():
             t1 = time.perf_counter()
             self.train_step(batch)
             self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
-
             t2 = time.perf_counter()
-            print(self.step, self.metric('policy_loss'), self.metric('value_loss'), self.metric('total_loss'), batch[0].size())
 
+            self.print_metrics(prefix='train')
             self.log_metrics(self.train_writer)
             self.reset_metrics()
 
@@ -159,54 +158,19 @@ class Session():
 
         # store the metrics so that other functions have access to them
         self.metrics['policy_loss'].append(policy_loss.item())
-        self.metrics['value_loss'].append(value_loss.item())
-        self.metrics['reg_loss'].append(reg_loss.item())
+        self.metrics['value_loss'].append(value_loss.item() / 4)
+        self.metrics['reg_loss'].append(reg_loss.item() * 1e-4)
         self.metrics['total_loss'].append(total_loss.item())
         self.metrics['policy_accuracy'].append(policy_accuracy.item())
         self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
 
         return total_loss
 
-    def resume(self, path=None):
-        if path is None:
-            directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
-            with open(os.path.join(directory, 'latest'), 'r') as fd:
-                path = fd.read().strip()
-        if not os.path.exists(path):
-            raise OSError('"{}" does not exist.')
-        print(f'Resuming from "{path}"...')
-        checkpoint = torch.load(path)
-        self.net.module.load_state_dict(checkpoint['net'])
-        self.optimizer.load_state_dict(checkpoint['optimizer'])
-        self.step = checkpoint['step']
-
-    def checkpoint(self):
-        checkpoint = {
-            'net': self.net.module.state_dict(),
-            'optimizer': self.optimizer.state_dict(),
-            'step': self.step,
-        }
-        directory = os.path.join(self.cfg['training']['checkpoint_directory'], self.cfg['name'])
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        # proto weights
-        filename = f'net-{self.step}.pb.gz'
-        path = os.path.join(directory, filename)
-        self.net.module.export_proto(path)
-        # checkpoint
-        filename = f'checkpoint-{self.step}.pth'
-        path = os.path.join(directory, filename)
-        torch.save(checkpoint, path)
-        print(f'Checkpoint saved to "{path}"')
-        # store path so that we know what checkpoint to resume from without specifying it
-        with open(os.path.join(directory, 'latest'), 'w') as fd:
-            fd.write(f'{path}\n')
-
     def log_metrics(self, writer):
         writer.add_scalar('Loss/Policy', self.metric('policy_loss'), global_step=self.step)
-        writer.add_scalar('Loss/Value', self.metric('value_loss') / 4, global_step=self.step)
+        writer.add_scalar('Loss/Value', self.metric('value_loss'), global_step=self.step)
         if writer == self.train_writer:
-            writer.add_scalar('Loss/Weight', self.metric('reg_loss') * 1e-4, global_step=self.step)
+            writer.add_scalar('Loss/Weight', self.metric('reg_loss'), global_step=self.step)
         writer.add_scalar('Loss/Total', self.metric('total_loss'), global_step=self.step)
         writer.add_scalar('Policy/Accuracy', self.metric('policy_accuracy'), global_step=self.step)
         if writer == self.train_writer:
@@ -220,6 +184,14 @@ class Session():
     def reset_metrics(self):
         for key in list(self.metrics.keys()):
             self.metrics[key] = []
+
+    def print_metrics(self, prefix):
+        fields = ['total', 'policy', 'value', 'reg']
+        values = ['{:.4f}'.format(self.metric(f'{field}_loss')) for field in fields]
+        pairs = list(zip(fields, values))
+        pairs.insert(0, ('step', self.step))
+        formatted = (f'{field}={value}' for field, value in pairs)
+        print(prefix, ', '.join(formatted))
 
     def step_is_multiple(self, factor):
         return self.step % factor == 0
