@@ -172,7 +172,7 @@ class Session():
 
     def log_metrics(self, writer):
         writer.add_scalar('loss/policy', self.metric('policy_loss'), global_step=self.step)
-        writer.add_scalar('Loss/value', self.metric('value_loss'), global_step=self.step)
+        writer.add_scalar('loss/value', self.metric('value_loss'), global_step=self.step)
         if writer == self.train_writer:
             writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
         writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
