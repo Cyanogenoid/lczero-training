@@ -52,8 +52,11 @@ class Session():
             shufflebuffer_size=cfg['training']['shufflebuffer_size'],
             positions_per_game=cfg['training']['positions_per_game'],
         )
+        t0 = time.perf_counter()
         print('Prefetching data...')
         next(iter(self.train_loader))
+        t1 = time.perf_counter()
+        print('loading took', t1-t0)
         next(iter(self.test_loader))
 
         # place to store and accumulate per-batch metrics
