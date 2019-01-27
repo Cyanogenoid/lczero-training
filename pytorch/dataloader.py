@@ -20,6 +20,8 @@
 import multiprocessing as mp
 import shufflebuffer as sb
 
+import utils
+
 
 class ShufflingDataLoader:
     def __init__(self, chunkdatasrc, struct_size, shuffle_size=1, workers=None):
@@ -41,10 +43,13 @@ class ShufflingDataLoader:
 
         self.shuffle_size = shuffle_size
         self.struct_size = struct_size
+        self.records_per_worker = 16
         workers = workers or mp.cpu_count()
         self.chunkdatasrc = chunkdatasrc
 
         print("Using {} worker processes.".format(workers))
+
+        self.output_stack = []
 
         # Start the child workers running
         self.processes = []
@@ -70,8 +75,8 @@ class ShufflingDataLoader:
         and send through pipe back to main process.
         """
         chunkdatasrc = self.chunkdatasrc()
-        for item in chunkdatasrc:
-            self.queue.put(item)
+        for item in utils.grouper(chunkdatasrc, self.records_per_worker):
+            self.queue.put(b''.join(item))
 
 
     def __iter__(self):
@@ -81,14 +86,11 @@ class ShufflingDataLoader:
         """
         sbuff = sb.ShuffleBuffer(self.shuffle_size)
         while True:
-            s = self.queue.get()
-            s = sbuff.insert_or_replace(s)
-            if s is None:
-                continue  # shuffle buffer not yet full
-            yield s
-        # drain the shuffle buffer.
-        while True:
-            s = sbuff.extract()
-            if s is None:
-                return
-            yield s
+            records = self.queue.get()
+            for i in range(self.records_per_worker):
+                s = records[i * self.struct_size : (i+1) * self.struct_size]
+                s = sbuff.insert_or_replace(s)
+                if s is not None:
+                    self.output_stack.append(s)
+            while self.output_stack:
+                yield self.output_stack.pop()

@@ -10,6 +10,7 @@ import torch.utils.data as data
 import numpy as np
 
 import dataloader
+import utils
 
 
 V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
@@ -27,17 +28,10 @@ def v3_loader(path, batch_size, positions_per_game, shufflebuffer_size, num_work
     # only include correctly parsed v3 records
     loader = filter(lambda x: x is not None, loader)
     # group records into groups of size batch_size
-    loader = grouper(loader, batch_size)
+    loader = utils.grouper(loader, batch_size)
     # turn groups into PyTorch batches
     loader = map(collate_positions, loader)
     return loader
-
-
-def grouper(iterable, n, fillvalue=None):
-    "Collect data into fixed-length chunks or blocks"
-    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx"
-    args = [iter(iterable)] * n
-    return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 
 def collate_positions(batch):
