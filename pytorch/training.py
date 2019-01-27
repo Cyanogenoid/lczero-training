@@ -165,7 +165,7 @@ class Session():
         self.metrics['value_loss'].append(value_loss.item() / 4)
         self.metrics['reg_loss'].append(reg_loss.item() * 1e-4)
         self.metrics['total_loss'].append(total_loss.item())
-        self.metrics['policy_accuracy'].append(policy_accuracy.item())
+        self.metrics['policy_accuracy'].append(policy_accuracy.item() * 100)
         self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
 
         return total_loss
