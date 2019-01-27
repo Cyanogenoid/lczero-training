@@ -42,40 +42,36 @@ class ShufflingDataLoader:
         self.shuffle_size = shuffle_size
         self.struct_size = struct_size
         workers = workers or mp.cpu_count()
+        self.chunkdatasrc = chunkdatasrc
 
         print("Using {} worker processes.".format(workers))
 
         # Start the child workers running
-        self.readers = []
-        self.writers = []
         self.processes = []
-        for _ in range(workers):
-            read, write = mp.Pipe(duplex=False)
-            p = mp.Process(target=self.task, args=(chunkdatasrc(), write))
+        self.queue = mp.SimpleQueue()
+        for i in range(workers):
+            p = mp.Process(target=self.task)
             self.processes.append(p)
             p.start()
-            self.readers.append(read)
-            self.writers.append(write)
 
 
     def shutdown(self):
         """
         Terminates all the workers
         """
-        for i in range(len(self.readers)):
-            self.processes[i].terminate()
-            self.processes[i].join()
-            self.readers[i].close()
-            self.writers[i].close()
+        for process in self.processes:
+            process.terminate()
+            process.join()
 
 
-    def task(self, chunkdatasrc, writer):
+    def task(self):
         """
         Run in fork'ed process, read data from chunkdatasrc
         and send through pipe back to main process.
         """
+        chunkdatasrc = self.chunkdatasrc()
         for item in chunkdatasrc:
-            writer.send_bytes(item)
+            self.queue.put(item)
 
 
     def __iter__(self):
@@ -84,17 +80,12 @@ class ShufflingDataLoader:
         records.
         """
         sbuff = sb.ShuffleBuffer(self.shuffle_size)
-        while len(self.readers):
-            for r in mp.connection.wait(self.readers):
-                try:
-                    s = r.recv_bytes()
-                    s = sbuff.insert_or_replace(s)
-                    if s is None:
-                        continue  # shuffle buffer not yet full
-                    yield s
-                except EOFError:
-                    print("Reader EOF")
-                    self.readers.remove(r)
+        while True:
+            s = self.queue.get()
+            s = sbuff.insert_or_replace(s)
+            if s is None:
+                continue  # shuffle buffer not yet full
+            yield s
         # drain the shuffle buffer.
         while True:
             s = sbuff.extract()
