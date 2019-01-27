@@ -83,7 +83,7 @@ class ShufflingDataLoader:
         Read v3 records from child workers, shuffle, and yield
         records.
         """
-        sbuff = sb.ShuffleBuffer(self.struct_size, self.shuffle_size)
+        sbuff = sb.ShuffleBuffer(self.shuffle_size)
         while len(self.readers):
             for r in mp.connection.wait(self.readers):
                 try:
