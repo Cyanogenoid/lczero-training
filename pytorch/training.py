@@ -158,7 +158,7 @@ class Session():
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
             policy_accuracy = (policy.max(dim=1)[1] == policy_target.max(dim=1)[1]).float().mean()
-            policy_target_entropy = (policy_target * policy_target.log()).sum(dim=1).mean()
+            policy_target_entropy = -(policy_target * policy_target.log()).mean(dim=0).sum()
 
         # store the metrics so that other functions have access to them
         self.metrics['policy_loss'].append(policy_loss.item())
