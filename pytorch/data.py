@@ -92,13 +92,16 @@ class Folder(data.Dataset):
             print('Skipping', path)
             return []
 
+    def position(self, chunk, number):
+        start = number * self.record_size
+        end = (number + 1) * self.record_size
+        return chunk[start:end]
+
     def random_positions(self, chunk, n=1):
         num_records = len(chunk) // self.record_size
         for _ in range(n):
             pos = random.randint(0, num_records - 1)
-            start = pos * self.record_size
-            end = (pos + 1) * self.record_size
-            yield chunk[start:end]
+            yield self.position(chunk, pos)
 
     def __len__(self):
         return len(self.files)
