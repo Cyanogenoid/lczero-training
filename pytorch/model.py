@@ -47,7 +47,7 @@ class Net(nn.Module):
 
     def export_proto(self, path):
         weights = [w.detach().cpu().numpy() for w in extract_weights(self)]
-        weights[:, 109, :, :] /= 99  # scale rule50 weights due to legacy reasons
+        weights[0][:, 109, :, :] /= 99  # scale rule50 weights due to legacy reasons
         proto = net.Net()
         proto.fill_net(weights, se=True)
         proto.save_proto(path)
@@ -58,7 +58,7 @@ class Net(nn.Module):
         weights = proto.get_weights()
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
             model_weight[:] = torch.from_numpy(loaded_weight)
-        self.input_conv.weight[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
+        self.input_conv.layers[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
 
     def export_onnx(self, path):
         dummy_input = torch.randn(10, 112, 8, 8)
