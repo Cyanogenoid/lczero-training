@@ -57,7 +57,7 @@ class Net(nn.Module):
         proto.parse_proto(path)
         weights = proto.get_weights()
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
-            model_weight[:] = torch.from_numpy(loaded_weight)
+            model_weight[:] = torch.from_numpy(loaded_weight).view_as(model_weight)
         self.input_conv.layers[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
 
     def export_onnx(self, path):
