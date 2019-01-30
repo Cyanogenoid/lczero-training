@@ -48,8 +48,8 @@ class Net:
     def fill_layer(self, layer, weights):
         """Normalize and populate 16bit layer in protobuf"""
         params = np.array(weights.pop(), dtype=np.float32)
-        layer.min_val = 0 if len(params) == 1 else float(np.min(params))
-        layer.max_val = 1 if len(params) == 1 and np.max(params) == 0 else float(np.max(params))
+        layer.min_val = 0 if params.size == 1 else float(np.min(params))
+        layer.max_val = 1 if params.size == 1 and np.max(params) == 0 else float(np.max(params))
         params = (params - layer.min_val) / (layer.max_val - layer.min_val)
         params *= 0xffff
         params = np.round(params)
