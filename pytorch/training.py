@@ -202,7 +202,8 @@ class Session():
             writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
         writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
         writer.add_scalar('metrics/policy_accuracy', self.metric('policy_accuracy'), global_step=self.step)
-        writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
+        if writer == self.train_writer:  # target data comes from same distribution, so no point plotting it again
+            writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
         if writer == self.train_writer:
             writer.add_scalar('metrics/gradient_norm', self.metric('gradient_norm'), global_step=self.step)
             writer.add_scalar('hyperparameter/learning_rate', self.lr_scheduler.get_lr()[0], global_step=self.step)
