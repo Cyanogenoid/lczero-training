@@ -17,29 +17,40 @@ V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
 
 
 def v3_loader(path, batch_size, positions_per_game, shufflebuffer_size, num_workers=None):
-    # load chunks from folder
-    dataset = Folder(path, positions_per_game)
-    # infinite generator of positions
-    position_loader = loop_positions(dataset)
-    # multi-threaded data loader
-    loader = dataloader.ShufflingDataLoader(lambda: position_loader, shuffle_size=shufflebuffer_size, struct_size=V3_STRUCT.size)
-    # parse v3 records into PyTorch tensors
-    loader = map(parse_v3, loader)
-    # only include correctly parsed v3 records
-    loader = filter(lambda x: x is not None, loader)
-    # group records into groups of size batch_size
-    loader = utils.grouper(loader, batch_size)
-    # turn groups into PyTorch batches
-    loader = map(collate_positions, loader)
+    dataset = Positions(path, positions_per_game, shufflebuffer_size, num_workers=num_workers)
+    loader = data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        # shufflebuffer isn't threadsafe, so only use one thread to do shufflebuffer work, parse v3 records, and form batches
+        num_workers=1,
+    )
     return loader
 
 
-def collate_positions(batch):
-    planes, probs, winner = zip(*batch)
-    planes = torch.stack(planes)
-    probs = torch.stack(probs)
-    winner = torch.FloatTensor(winner)
-    return planes, probs, winner
+class Positions(data.Dataset):
+    def __init__(self, path, positions_per_game, shufflebuffer_size, num_workers=None):
+        # load chunks from folder
+        dataset = Folder(path, positions_per_game)
+        # infinite generator of positions
+        position_loader = loop_positions(dataset)
+        # multi-threaded data loader
+        loader = dataloader.ShufflingDataLoader(lambda: position_loader, shuffle_size=shufflebuffer_size, struct_size=V3_STRUCT.size)
+        # parse v3 records into PyTorch tensors
+        loader = map(parse_v3, loader)
+        # only include correctly parsed v3 records
+        loader = filter(lambda x: x is not None, loader)
+        # group records into groups of size batch_size
+        #loader = utils.grouper(loader, batch_size)
+        # turn groups into PyTorch batches
+        #loader = map(collate_positions, loader)
+        self.loader = loader
+
+    def __getitem__(self, _):
+        return next(self.loader)
+
+    def __len__(self):
+        return 2**30
 
 
 def parse_v3(position):
@@ -58,6 +69,7 @@ def parse_v3(position):
     planes = torch.cat([planes, flat_planes], dim=0)
 
     probs = torch.from_numpy(np.frombuffer(probs, dtype=np.float32))
+    winner = np.float32(winner)
 
     return planes, probs, winner
 
