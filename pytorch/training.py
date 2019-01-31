@@ -134,6 +134,7 @@ class Session():
             for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
                 if i >= self.cfg['logging']['test_steps'] * self.cfg['training']['batch_splits']:
+                    summary.policy_value_gradient_ratio(self, batch)
                     break
         self.print_metrics(prefix=prefix)
         self.log_metrics(self.test_writer)

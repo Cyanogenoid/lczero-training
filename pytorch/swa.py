@@ -17,6 +17,7 @@ class SWA():
     def __init__(self, session):
         self.session = session
         self.momentum = session.cfg['training']['swa_momentum']
+        self.active = False
         if self.enabled:
             self.net = copy.deepcopy(session.net)
             for param in self.net.parameters():
@@ -47,7 +48,10 @@ class SWA():
         self.session.net, self.net = self.net, self.session.net
         # use swa test writer
         self.session.test_writer, self.test_writer = self.test_writer, self.session.test_writer
+        # make it known that swa is being used
+        self.active = True
         yield
         # revert the changes
         self.session.net, self.net = self.net, self.session.net
         self.session.test_writer, self.test_writer = self.test_writer, self.session.test_writer
+        self.active = False
