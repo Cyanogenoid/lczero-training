@@ -17,7 +17,7 @@ class Net(nn.Module):
 
         self.policy_head = PolicyHead(channels, policy_channels)
         self.value_head = ValueHead(channels, 32, 128)
-        
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -174,7 +174,6 @@ class Flatten(nn.Module):
 
 
 '''
-# TODO
 class GhostBatchNorm2d(nn.Module):
     def __init__(self, channels, virtual_batch_size):
         self.bn = nn.BatchNorm2d(channels)

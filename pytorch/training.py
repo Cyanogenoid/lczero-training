@@ -74,6 +74,11 @@ class Session():
 
         self.step = 0
 
+        # TODO more tensorboard metrics, graph, histograms
+        # TODO graceful shutdown
+        # TODO put data loader behind an mp.Queue and so that batching is not done on main thread
+        # TODO verify against jio net with se_ratio: 8, policy_channel:32, position sample rate 32
+
     def train_loop(self):
         print('Training...')
         if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
@@ -91,6 +96,8 @@ class Session():
             self.print_metrics(prefix='train')
             self.log_metrics(self.train_writer)
             self.reset_metrics()
+
+            self.swa.update()
 
             if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
