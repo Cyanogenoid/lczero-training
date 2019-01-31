@@ -13,7 +13,7 @@ def entropy(distribution):
     return per_element.mean(dim=0).sum()
 
 
-def policy_skewness(net):
+def policy_weight_skewness(net):
     # ttps://en.wikipedia.org/wiki/Skewness#Pearson's_moment_coefficient_of_skewness
     policy_weight = net.module.policy_head.lin.weight
     policy_weight_mean = policy_weight.mean()

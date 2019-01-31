@@ -16,6 +16,6 @@ def weight_histograms(session):
         session.train_writer.add_histogram(f'weight/{name}', param.detach().cpu().numpy(), session.step)
 
 
-def policy_skewness(session):
+def policy_weight_skewness(session):
     skewness = metrics.policy_skewness(session.net)
-    session.train_writer.add_scalar('metrics/policy_skewness', skewness, global_step=session.step)
+    session.train_writer.add_scalar('metrics/policy_weight_skewness', skewness, global_step=session.step)

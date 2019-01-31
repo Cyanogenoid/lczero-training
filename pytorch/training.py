@@ -137,8 +137,8 @@ class Session():
                     break
         self.print_metrics(prefix=prefix)
         self.log_metrics(self.test_writer)
-        summary.policy_skewness(self)
         self.reset_metrics()
+        summary.policy_weight_skewness(self)
 
     def train_step(self, batch):
         self.net.train()
