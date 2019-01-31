@@ -100,13 +100,15 @@ class Session():
 
             self.swa.update()
 
-            if self.step == 1:
-                summary.graph(self)
             if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
                 self.swa.test_epoch()
             if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
                 checkpoint.save(self)
+            if self.step == 1:
+                summary.model_graph(self)
+            if self.step_is_multiple(self.cfg['logging']['weight_histogram_every']):
+                summary.weight_histograms(self)
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
                 break
