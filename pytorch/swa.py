@@ -3,6 +3,7 @@ import copy
 
 import torch
 from tensorboardX import SummaryWriter
+import utils
 
 
 class SWA():
@@ -29,7 +30,7 @@ class SWA():
     def update(self):
         if not self.enabled:
             return
-        for swa, base in zip(variables(self.net), variables(self.session.net)):
+        for swa, base in zip(utils.variables(self.net), utils.variables(self.session.net)):
             # exponential moving average without bias correction
             # just don't use the swa nets early on and everything is ok
             swa.data = self.momentum * swa + (1 - self.momentum) * base.detach()
@@ -50,8 +51,3 @@ class SWA():
         # revert the changes
         self.session.net, self.net = self.net, self.session.net
         self.session.test_writer, self.test_writer = self.test_writer, self.session.test_writer
-
-
-def variables(net):
-    yield from net.parameters()
-    yield from net.buffers()

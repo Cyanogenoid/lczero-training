@@ -10,3 +10,10 @@ def grouper(iterable, n, fillvalue=None):
     return itertools.zip_longest(*args, fillvalue=fillvalue)
 
 
+def variables(net):
+    yield from net.parameters()
+    yield from net.buffers()
+
+def named_variables(net):
+    yield from net.named_parameters()
+    yield from net.named_buffers()
