@@ -27,10 +27,13 @@ class SWA():
         return self.momentum > 0.0
 
     def update(self):
+        if not self.enabled:
+            return
         for swa, base in zip(self.net.parameters(), self.session.net.parameters()):
             # exponential moving average without bias correction
             # just don't use the swa nets early on and everything is ok
-            swa = self.momentum * swa + (1 - self.momentum) * base
+            w = self.momentum * swa + (1 - self.momentum) * base
+            swa[:] = w
 
     def test_epoch(self):
         if not self.enabled:
