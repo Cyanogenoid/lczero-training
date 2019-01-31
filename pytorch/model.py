@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
 import torch.nn.init as init
@@ -12,8 +14,8 @@ class Net(nn.Module):
 
         self.input_conv = ConvBlock(112, channels, 3, padding=1)
 
-        blocks = [ResidualBlock(channels, se_ratio) for _ in range(residual_blocks)]
-        self.residual_stack = nn.Sequential(*blocks)
+        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
         self.value_head = ValueHead(channels, 32, 128)
@@ -67,97 +69,77 @@ class Net(nn.Module):
         torch.onnx.export(self, dummy_input, path, input_names=input_names, output_names=output_names, verbose=True)
 
 
-class PolicyHead(nn.Module):
+class PolicyHead(nn.Sequential):
     def __init__(self, in_channels, policy_channels):
-        super().__init__()
-
-        self.layers = nn.Sequential(
-            ConvBlock(in_channels, policy_channels, 1),
-            Flatten(),
-            nn.Linear(8 * 8 * policy_channels, 1858),
-        )
-
-    def forward(self, x):
-        x = self.layers(x)
-        return x
+        super().__init__(OrderedDict([
+            ('conv_block', ConvBlock(in_channels, policy_channels, 1)),
+            ('flatten', Flatten()),
+            ('lin', nn.Linear(8 * 8 * policy_channels, 1858)),
+        ]))
 
 
-class ValueHead(nn.Module):
+class ValueHead(nn.Sequential):
     def __init__(self, in_channels, value_channels, lin_channels):
-        super().__init__()
-
-        self.layers = nn.Sequential(
-            ConvBlock(in_channels, value_channels, 1),
-            Flatten(),
-            nn.Linear(value_channels * 8 * 8, lin_channels),
-            nn.ReLU(inplace=True),
-            nn.Linear(lin_channels, 1),
-        )
-
-    def forward(self, x):
-        x = self.layers(x)
-        x = x.tanh()
-        return x
+        super().__init__(OrderedDict([
+            ('conv_block', ConvBlock(in_channels, value_channels, 1)),
+            ('flatten', Flatten()),
+            ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('lin2', nn.Linear(lin_channels, 1)),
+            ('tanh', nn.Tanh()),
+        ]))
 
 
-class ResidualBlock(nn.Module):
+class ResidualBlock(nn.Sequential):
     def __init__(self, channels, se_ratio):
-        super().__init__()
+        super().__init__(OrderedDict([
+            ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
+            ('bn1', nn.BatchNorm2d(channels)),
+            ('relu', nn.ReLU(inplace=True)),
 
-        self.layers = nn.Sequential(
-            nn.Conv2d(channels, channels, 3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
-            nn.ReLU(inplace=True),
+            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
+            ('bn2', nn.BatchNorm2d(channels)),
 
-            nn.Conv2d(channels, channels, 3, padding=1, bias=False),
-            nn.BatchNorm2d(channels),
-
-            SqueezeExcitation(channels, se_ratio),
-        )
-        self.relu = nn.ReLU(inplace=True)
+            ('se', SqueezeExcitation(channels, se_ratio)),
+        ]))
 
     def forward(self, x):
         x_in = x
 
-        x = self.layers(x)
+        x = super().forward(x)
 
         x = x + x_in
         x = self.relu(x)
         return x
 
 
-class ConvBlock(nn.Module):
+class ConvBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, padding=0):
-        super().__init__()
-
-        self.layers = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
-        )
-
-    def forward(self, x):
-        x = self.layers(x)
-        return x
+        super().__init__(OrderedDict([
+            ('conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
+            ('bn', nn.BatchNorm2d(out_channels)),
+            ('relu', nn.ReLU(inplace=True)),
+        ]))
 
 
 class SqueezeExcitation(nn.Module):
     def __init__(self, channels, ratio):
         super().__init__()
 
-        self.layers = nn.Sequential(
-            nn.Linear(channels, channels // ratio),
-            nn.ReLU(inplace=True),
-            nn.Linear(channels // ratio, 2 * channels),
-        )
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.lin1 = nn.Linear(channels, channels // ratio)
+        self.relu = nn.ReLU(inplace=True)
+        self.lin2 = nn.Linear(channels // ratio, 2 * channels)
 
     def forward(self, x):
+        n, c, h, w = x.size()
         x_in = x
 
-        n, c, h, w = x.size()
-        x = x.view(n, c, -1).mean(dim=2)
+        x = self.pool(x).view(n, c)
+        x = self.lin1(x)
+        x = self.relu(x)
+        x = self.lin2(x)
 
-        x = self.layers(x)
         x = x.view(n, 2 * c, 1, 1)
         scale, shift = x.chunk(2, dim=1)
 
@@ -193,8 +175,9 @@ def extract_weights(m):
         yield from extract_weights(m.policy_head)
         yield from extract_weights(m.value_head)
 
-    elif type(m) in {ConvBlock, PolicyHead, ValueHead, ResidualBlock, SqueezeExcitation}:
-        yield from extract_weights(m.layers)
+    elif isinstance(m, SqueezeExcitation):
+        yield from extract_weights(m.lin1)
+        yield from extract_weights(m.lin2)
 
     elif isinstance(m, nn.Sequential):
         for layer in m:
