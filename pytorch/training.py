@@ -17,6 +17,7 @@ import model
 import checkpoint
 from lr import create_lr_schedule
 import swa
+import summary
 
 
 class Session():
@@ -99,6 +100,8 @@ class Session():
 
             self.swa.update()
 
+            if self.step == 1:
+                summary.graph(self)
             if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
                 self.swa.test_epoch()
