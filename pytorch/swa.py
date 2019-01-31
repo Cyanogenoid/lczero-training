@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 import copy
-import itertools
 
 import torch
 from tensorboardX import SummaryWriter
@@ -30,11 +29,10 @@ class SWA():
     def update(self):
         if not self.enabled:
             return
-        params_and_buffers = lambda net: itertools.chain(net.parameter(), net.buffers())
-        for swa, base in zip(params_and_buffers(self.net), params_and_buffers(self.session.net)):
+        for swa, base in zip(variables(self.net), variables(self.session.net)):
             # exponential moving average without bias correction
             # just don't use the swa nets early on and everything is ok
-            swa[:] = self.momentum * swa + (1 - self.momentum) * base.detach()
+            swa.data = self.momentum * swa + (1 - self.momentum) * base.detach()
 
     def test_epoch(self):
         if not self.enabled:
@@ -52,3 +50,8 @@ class SWA():
         # revert the changes
         self.session.net, self.net = self.net, self.session.net
         self.session.test_writer, self.test_writer = self.test_writer, self.session.test_writer
+
+
+def variables(net):
+    yield from net.parameters()
+    yield from net.buffers()
