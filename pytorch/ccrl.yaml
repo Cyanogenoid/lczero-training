@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-baseline'
+name: '256x20-sample32'
 
 dataset:
     train_path: 'data/v3/train/*'
@@ -43,13 +43,15 @@ training:
     checkpoint_every: 10000
     checkpoint_directory: 'checkpoints'
 
+    swa_momentum: 0.99
+
 model:
-    residual_channels: 128
-    residual_blocks: 10
-    policy_channels: 80
-    se_ratio: 4
+    residual_channels: 256
+    residual_blocks: 20
+    policy_channels: 32
+    se_ratio: 8
 
 logging:
     directory: 'runs'
-    test_steps: 50
-    test_every: 1000
+    test_steps: 25
+    test_every: 500
