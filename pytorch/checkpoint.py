@@ -30,7 +30,7 @@ def save(session):
     if session.swa.enabled:
         filename = f'net-swa-{session.step}.pb.gz'
         path = os.path.join(directory, filename)
-        session.swa.net.export_proto(path)
+        session.swa.net.module.export_proto(path)
     # checkpoint
     checkpoint = {
         'net': session.net.module.state_dict(),
