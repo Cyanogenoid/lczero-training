@@ -84,7 +84,7 @@ class ValueHead(nn.Sequential):
             ('conv_block', ConvBlock(in_channels, value_channels, 1)),
             ('flatten', Flatten()),
             ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu1', nn.ReLU(inplace=True)),
             ('lin2', nn.Linear(lin_channels, 1)),
             ('tanh', nn.Tanh()),
         ]))
@@ -102,6 +102,7 @@ class ResidualBlock(nn.Sequential):
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
+        self.relu2 = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x_in = x
@@ -109,7 +110,7 @@ class ResidualBlock(nn.Sequential):
         x = super().forward(x)
 
         x = x + x_in
-        x = self.relu(x)
+        x = self.relu2(x)
         return x
 
 
