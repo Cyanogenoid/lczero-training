@@ -23,14 +23,6 @@ def save(session):
     directory = os.path.join(session.cfg['training']['checkpoint_directory'], session.cfg['name'])
     if not os.path.exists(directory):
         os.makedirs(directory)
-    # proto weights
-    filename = f'net-{session.step}.pb.gz'
-    path = os.path.join(directory, filename)
-    session.net.module.export_proto(path)
-    if session.swa.enabled:
-        filename = f'net-swa-{session.step}.pb.gz'
-        path = os.path.join(directory, filename)
-        session.swa.net.module.export_proto(path)
     # checkpoint
     checkpoint = {
         'net': session.net.module.state_dict(),
@@ -46,3 +38,11 @@ def save(session):
     # store path so that we know what checkpoint to resume from without specifying it
     with open(os.path.join(directory, 'latest'), 'w') as fd:
         fd.write(f'{path}\n')
+    # proto weights
+    filename = f'net-{session.step}.pb.gz'
+    path = os.path.join(directory, filename)
+    session.net.module.export_proto(path)
+    if session.swa.enabled:
+        filename = f'net-swa-{session.step}.pb.gz'
+        path = os.path.join(directory, filename)
+        session.swa.net.module.export_proto(path)
