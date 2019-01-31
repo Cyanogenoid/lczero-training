@@ -1,7 +1,9 @@
 import collections
+import copy
 import gzip
 import time
 import os
+from contextlib import contextmanager
 
 import torch
 import torch.nn as nn
@@ -14,6 +16,7 @@ import data
 import model
 import checkpoint
 from lr import create_lr_schedule
+import swa
 
 
 class Session():
@@ -24,13 +27,12 @@ class Session():
         torch.backends.cudnn.benchmark = True
 
         print('Building net...')
-        self.net = model.Net(
+        self.net = nn.DataParallel(model.Net(
             residual_channels=cfg['model']['residual_channels'],
             residual_blocks=cfg['model']['residual_blocks'],
             policy_channels=cfg['model']['policy_channels'],
             se_ratio=cfg['model']['se_ratio'],
-        ).cuda()
-        self.net = nn.DataParallel(self.net)  # multi-gpu
+        ).cuda())
         self.optimizer = optim.SGD(self.net.parameters(), lr=1, momentum=0.9, nesterov=True)
         lr_schedule, lr_steps = create_lr_schedule(cfg['training']['lr'])
         self.lr_scheduler = optim.lr_scheduler.LambdaLR(self.optimizer, lr_schedule)
@@ -64,18 +66,19 @@ class Session():
         self.metrics = collections.defaultdict(list)
 
         # SummaryWriters to save metrics for tensorboard to display
-        run_path = os.path.join(cfg['logging']['directory'], cfg['name'])
-        self.train_writer = SummaryWriter(f'{run_path}-train')
-        self.test_writer = SummaryWriter(f'{run_path}-test')
+        self.summary_path = os.path.join(cfg['logging']['directory'], cfg['name'])
+        self.train_writer = SummaryWriter(f'{self.summary_path}-train')
+        self.test_writer = SummaryWriter(f'{self.summary_path}-test')
+
+        self.swa = swa.SWA(self)
 
         self.step = 0
-
-        # TODO swa
 
     def train_loop(self):
         print('Training...')
         if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
             self.test_epoch()
+            self.swa.test_epoch()
 
         t0 = time.perf_counter()
         for batch in self.train_loader:
@@ -91,6 +94,7 @@ class Session():
 
             if self.step_is_multiple(self.cfg['logging']['test_every']):
                 self.test_epoch()
+                self.swa.test_epoch()
             if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
                 checkpoint.save(self)
             if self.step_is_multiple(self.cfg['training']['total_steps']):
@@ -104,17 +108,17 @@ class Session():
         if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
             checkpoint.save(self)
 
-    def test_epoch(self):
+    def test_epoch(self, prefix='test'):
         self.net.eval()
+        self.prefix = 'test'
         with torch.no_grad():
             for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
                 if i >= self.cfg['logging']['test_steps'] * self.cfg['training']['batch_splits']:
                     break
-        self.print_metrics('test')
+        self.print_metrics(prefix=prefix)
         self.log_metrics(self.test_writer)
         self.reset_metrics()
-        self.net.train()
 
     def train_step(self, batch):
         self.net.train()
@@ -196,7 +200,7 @@ class Session():
         pairs = list(zip(fields, values))
         pairs.insert(0, ('step', self.step))
         formatted = (f'{field}={value}' for field, value in pairs)
-        print(prefix, ', '.join(formatted))
+        print(prefix.ljust(8), ', '.join(formatted))
 
     def step_is_multiple(self, factor):
         return self.step % factor == 0
