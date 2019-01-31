@@ -8,6 +8,7 @@ import itertools
 import torch
 import torch.utils.data as data
 import numpy as np
+import lz4.frame
 
 import dataloader
 import utils
@@ -85,7 +86,7 @@ class Folder(data.Dataset):
     def __getitem__(self, i):
         path = self.files[i]
         try:
-            with gzip.open(path, 'rb') as fd:
+            with lz4.frame.open(path, 'rb') as fd:
                 chunk = fd.read()
             return self.random_positions(chunk, n=self.positions_per_game)
         except EOFError:
