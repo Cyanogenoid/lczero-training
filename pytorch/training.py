@@ -18,6 +18,7 @@ import checkpoint
 from lr import create_lr_schedule
 import swa
 import summary
+import metrics
 
 
 class Session():
@@ -109,6 +110,9 @@ class Session():
                 summary.model_graph(self)
             if self.step_is_multiple(self.cfg['logging']['weight_histogram_every']):
                 summary.weight_histograms(self)
+            if self.step_is_multiple(self.cfg['logging']['policy_skewness_every']):
+                summary.policy_skewness(self)
+
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
                 break
@@ -178,8 +182,8 @@ class Session():
 
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
-            policy_accuracy = (policy.max(dim=1)[1] == policy_target.max(dim=1)[1]).float().mean()
-            policy_target_entropy = -(policy_target * policy_target.clamp(min=1e-20).log()).mean(dim=0).sum()
+            policy_accuracy = metrics.accuracy(policy, policy_target)
+            policy_target_entropy = metrics.entropy(policy_target)
 
         # store the metrics so that other functions have access to them
         self.metrics['policy_loss'].append(policy_loss.item())
