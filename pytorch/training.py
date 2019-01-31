@@ -110,8 +110,6 @@ class Session():
                 summary.model_graph(self)
             if self.step_is_multiple(self.cfg['logging']['weight_histogram_every']):
                 summary.weight_histograms(self)
-            if self.step_is_multiple(self.cfg['logging']['policy_skewness_every']):
-                summary.policy_skewness(self)
 
             if self.step_is_multiple(self.cfg['training']['total_steps']):
                 # done with training
@@ -139,6 +137,7 @@ class Session():
                     break
         self.print_metrics(prefix=prefix)
         self.log_metrics(self.test_writer)
+        summary.policy_skewness(self)
         self.reset_metrics()
 
     def train_step(self, batch):
