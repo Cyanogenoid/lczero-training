@@ -1,7 +1,9 @@
 from collections import OrderedDict
+import math
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.nn.init as init
 
 import net as proto_net
@@ -12,13 +14,14 @@ class Net(nn.Module):
         super().__init__()
         channels = residual_channels
 
-        self.input_conv = ConvBlock(112, channels, 3, padding=1)
+        self.input_conv = ConvBlock(112+16, channels, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        blocks = [(f'block{i+1}', TransformerBlock(channels, 8, se_ratio)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
         self.value_head = ValueHead(channels, 32, 128)
+        self.positional_embedding = nn.Parameter(torch.rand(1, 16, 8, 8))
 
         self.reset_parameters()
 
@@ -33,6 +36,8 @@ class Net(nn.Module):
                 init.zeros_(module.bias)
 
     def forward(self, x):
+        n, c, h, w = x.size()
+        x = torch.cat([x, self.positional_embedding.expand(n, 16, h, w)], dim=1)
         x = self.input_conv(x)
         x = self.residual_stack(x)
 
@@ -88,6 +93,64 @@ class ValueHead(nn.Sequential):
             ('lin2', nn.Linear(lin_channels, 1)),
             ('tanh', nn.Tanh()),
         ]))
+
+
+class TransformerBlock(nn.Module):
+    def __init__(self, channels, heads, se_ratio):
+        super().__init__()
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.self_attention = SelfAttention(channels, heads)
+
+        self.bn2 = nn.BatchNorm2d(channels)
+        self.conv1 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(channels, channels, 3, padding=1)
+        self.se = SqueezeExcitation(channels, se_ratio)
+
+    def forward(self, x):
+        x_in = x
+        x = self.bn1(x)
+        x = self.self_attention(x)
+        x = x_in + x
+
+        x_in = x
+        x = self.bn2(x)
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.se(x)
+        x = x_in + x
+        return x
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, channels, heads, ratio=8):
+        super().__init__()
+        self.heads = heads
+        attention_channels = heads * channels // ratio
+        self.input = nn.Conv1d(channels, 3 * attention_channels, 1)
+        self.output = nn.Conv1d(attention_channels, channels, 1)
+
+        # softmax scale from paper
+        # xavier init that we want
+        # undo xavier init that is being applied
+        self.input_scale = \
+            1/math.sqrt(channels // ratio) * \
+            math.sqrt(2 / (channels + attention_channels)) / \
+            math.sqrt(2 / (channels + 3 * attention_channels))
+
+    def forward(self, x):
+        # NCHW -> NCL where L is now the set size
+        n, c, h, w = x.size()
+        l = h * w
+        x = x.view(n, c, l)
+
+        queries, keys, values = (self.input_scale * self.input(x)).view(n, self.heads, -1, l).chunk(3, dim=2)
+        weight = queries.transpose(2, 3).matmul(keys)
+        weight = F.softmax(weight.view(n, self.heads, -1), dim=2).view(n, self.heads, l, l)
+        heads = values.matmul(weight).view(n, -1, l)
+        output = self.output(heads)
+        return output.view(n, c, h, w)
 
 
 class ResidualBlock(nn.Sequential):
