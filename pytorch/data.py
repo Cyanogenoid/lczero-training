@@ -16,8 +16,8 @@ import utils
 V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
 
 
-def v3_loader(path, batch_size, positions_per_game, shufflebuffer_size, num_workers=None):
-    dataset = Positions(path, positions_per_game, shufflebuffer_size, num_workers=num_workers)
+def v3_loader(path, batch_size, sample_method, sample_argument, shufflebuffer_size, num_workers=None):
+    dataset = Positions(path, sample_method, sample_argument, shufflebuffer_size, num_workers=num_workers)
     loader = data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -29,9 +29,10 @@ def v3_loader(path, batch_size, positions_per_game, shufflebuffer_size, num_work
 
 
 class Positions(data.Dataset):
-    def __init__(self, path, positions_per_game, shufflebuffer_size, num_workers=None):
+    def __init__(self, path, sample_method, sample_argument, shufflebuffer_size, num_workers=None):
+        position_sampler = RandomPosition(**{sample_method: sample_argument}, record_size=V3_STRUCT.size)
         # load chunks from folder
-        dataset = Folder(path, positions_per_game)
+        dataset = Folder(path, transform=position_sampler)
         # infinite generator of positions
         position_loader = loop_positions(dataset)
         # multi-threaded data loader
@@ -40,10 +41,6 @@ class Positions(data.Dataset):
         loader = map(parse_v3, loader)
         # only include correctly parsed v3 records
         loader = filter(lambda x: x is not None, loader)
-        # group records into groups of size batch_size
-        #loader = utils.grouper(loader, batch_size)
-        # turn groups into PyTorch batches
-        #loader = map(collate_positions, loader)
         self.loader = loader
 
     def __getitem__(self, _):
@@ -84,10 +81,9 @@ def loop_positions(dataset):
 
 
 class Folder(data.Dataset):
-    def __init__(self, path, positions_per_game):
+    def __init__(self, path, transform=lambda x: x):
         self.files = self.find_files(path)
-        self.positions_per_game = positions_per_game
-        self.record_size = V3_STRUCT.size
+        self.transform = transform
 
     def find_files(self, path):
         files = glob.glob(path)
@@ -99,21 +95,49 @@ class Folder(data.Dataset):
         try:
             with gzip.open(path, 'rb') as fd:
                 chunk = fd.read()
-            return self.random_positions(chunk, n=self.positions_per_game)
+            return self.transform(chunk)
         except EOFError:
             print('Skipping', path)
             return []
 
-    def position(self, chunk, number):
+    def __len__(self):
+        return len(self.files)
+
+
+class RandomPosition():
+    def __init__(self, record_size, fixed=None, fixed_strict=None, every=None):
+        self.record_size = record_size
+        assert (fixed is not None) + (fixed_strict is not None) + (every is not None) == 1, 'can only specify one sampling ype'
+        if fixed is not None:
+            self.sample = lambda chunk: self.sample_fixed(chunk, fixed)
+        elif fixed_strict is not None:
+            self.sample = lambda chunk: self.sample_fixed_strict(chunk, fixed_strict)
+        elif every is not None:
+            self.sample = lambda chunk: self.sample_every(chunk, every)
+
+    def __call__(self, chunk):
+        for pos in self.sample(chunk):
+            yield self.index(chunk, pos)
+
+    def sample_fixed(self, chunk, n):
+        """ Sample a fixed (if possible) number of records from a game without replacement"""
+        num_records = len(chunk) // self.record_size
+        max_len = min(num_records, n)
+        return random.sample(range(num_records), k=max_len)
+
+    def sample_fixed_strict(self, chunk, n):
+        """ Sample a fixed number of records from a game with replacement """
+        num_records = len(chunk) // self.record_size
+        return random.choices(range(num_records), k=n)
+
+    def sample_every(self, chunk, nth):
+        """ Sample a varying number of records from a game, every nth on average """
+        num_records = len(chunk) // self.record_size
+        for pos in range(num_records):
+            if random.random() < 1/nth:
+                yield pos
+
+    def index(self, chunk, number):
         start = number * self.record_size
         end = (number + 1) * self.record_size
         return chunk[start:end]
-
-    def random_positions(self, chunk, n=1):
-        num_records = len(chunk) // self.record_size
-        for _ in range(n):
-            pos = random.randint(0, num_records - 1)
-            yield self.position(chunk, pos)
-
-    def __len__(self):
-        return len(self.files)
