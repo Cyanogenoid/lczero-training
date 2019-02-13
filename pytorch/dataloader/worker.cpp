@@ -1,6 +1,7 @@
 #include "chess/board.h"
 #include "chess/position.h"
 #include "neural/encoder.h"
+#include "utils/bititer.h"
 //#include "proto/chunk.pb.h"
 
 #include <torch/extension.h>
@@ -15,7 +16,17 @@ at::Tensor parse_chunk() {
     history.Reset(board, 0, 0);
 
     lczero::InputPlanes planes = lczero::EncodePositionForNN(history, 8, lczero::FillEmptyHistory::NO);
-    torch::Tensor tensor = torch::ones({112, 8, 8});
+    torch::Tensor tensor = torch::zeros({112, 8, 8});
+
+    // fill tensor with input plane data
+    float* data = tensor.data<float>();
+    int plane_idx = 0;
+    for (const auto& plane : planes) {
+        for (auto bit : lczero::IterateBits(plane.mask)) {
+            data[plane_idx * 112 + bit] = plane.value;
+        }
+        plane_idx++;
+    }
     return tensor;
 }
 
