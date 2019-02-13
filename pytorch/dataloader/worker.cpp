@@ -14,7 +14,7 @@ torch::Tensor input_planes_to_tensor(lczero::InputPlanes planes) {
     int plane_idx = 0;
     for (const auto& plane : planes) {
         for (auto bit : lczero::IterateBits(plane.mask)) {
-            data[plane_idx * 112 + bit] = plane.value;
+            data[plane_idx * 64 + bit] = plane.value;
         }
         plane_idx++;
     }
