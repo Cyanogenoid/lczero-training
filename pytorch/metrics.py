@@ -1,7 +1,11 @@
-def accuracy(predicted, target):
+def accuracy(predicted, vector=None, index=None):
+    assert vector is not None or index is not None
     # predict class with highest probability
     predicted = predicted.max(dim=1)[1]
-    target = target.max(dim=1)[1]
+    if vector is not None:
+        target = vector.max(dim=1)[1]
+    else:
+        target = index
     return (predicted == target).float().mean()
 
 

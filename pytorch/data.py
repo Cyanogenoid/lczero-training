@@ -68,9 +68,9 @@ def parse_v3(position):
     planes = torch.cat([planes, flat_planes], dim=0)
 
     probs = torch.from_numpy(np.frombuffer(probs, dtype=np.float32))
-    winner = np.float32(winner)
+    wdl = [1, 0, -1].index(winner)
 
-    return planes, probs, winner
+    return planes, probs, wdl
 
 
 def loop_positions(dataset):

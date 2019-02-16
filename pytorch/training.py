@@ -172,7 +172,7 @@ class Session():
         policy_logits = F.log_softmax(policy, dim=1)
         # this has the same gradient as cross-entropy
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
-        value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
+        value_loss = F.cross_entropy(value, value_target)
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
@@ -182,15 +182,17 @@ class Session():
 
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
-            policy_accuracy = metrics.accuracy(policy, policy_target)
+            policy_accuracy = metrics.accuracy(policy, vector=policy_target)
+            value_accuracy = metrics.accuracy(value, index=value_target)
             policy_target_entropy = metrics.entropy(policy_target)
 
         # store the metrics so that other functions have access to them
         self.metrics['policy_loss'].append(policy_loss.item())
-        self.metrics['value_loss'].append(value_loss.item() / 4)
+        self.metrics['value_loss'].append(value_loss.item())
         self.metrics['reg_loss'].append(reg_loss.item() * 1e-4)
         self.metrics['total_loss'].append(total_loss.item())
         self.metrics['policy_accuracy'].append(policy_accuracy.item() * 100)
+        self.metrics['value_accuracy'].append(value_accuracy.item() * 100)
         self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
 
         return total_loss
@@ -202,6 +204,7 @@ class Session():
             writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
         writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
         writer.add_scalar('metrics/policy_accuracy', self.metric('policy_accuracy'), global_step=self.step)
+        writer.add_scalar('metrics/value_accuracy', self.metric('value_accuracy'), global_step=self.step)
         if writer == self.train_writer:  # target data comes from same distribution, so no point plotting it again
             writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
         if writer == self.train_writer:

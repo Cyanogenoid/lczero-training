@@ -85,8 +85,7 @@ class ValueHead(nn.Sequential):
             ('flatten', Flatten()),
             ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
             ('relu1', nn.ReLU(inplace=True)),
-            ('lin2', nn.Linear(lin_channels, 1)),
-            ('tanh', nn.Tanh()),
+            ('lin2', nn.Linear(lin_channels, 3)),
         ]))
 
 
