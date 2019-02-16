@@ -8,8 +8,8 @@ setuptools.setup(
         name='lc0worker',
         sources=[
             'worker.cpp',
-            #'proto/net.pb.cc',
-            #'proto/chunk.pb.cc',
+            'proto/net.pb.cc',
+            'proto/chunk.pb.cc',
             'lc0/src/chess/bitboard.cc',
             'lc0/src/chess/board.cc',
             'lc0/src/chess/position.cc',
@@ -21,7 +21,10 @@ setuptools.setup(
             '.'
         ],
         libraries=['protobuf'],
+        #library_dirs=['/usr/lib', '/home/yan/anaconda3/envs/protoc/lib'],
         extra_compile_args=['-std=c++14', '-DNO_PEXT'],
+#        extra_link_args=['-L/usr/lib'],
+        #extra_link_args=['-L/home/yan/anaconda3/envs/protoc/lib'],
     )],
     cmdclass={
         'build_ext': BuildExtension,

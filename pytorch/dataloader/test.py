@@ -1,5 +1,7 @@
 import torch
 import lc0worker
+from tqdm import tqdm
 
-tensor = lc0worker.load_position()
-print(tensor)
+for _ in tqdm(range(10**8)):
+    tensor = lc0worker.load_position()
+    #print(tensor)
