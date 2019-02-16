@@ -1,6 +1,3 @@
-import torch
-
-
 def accuracy(predicted, target):
     # predict class with highest probability
     predicted = predicted.max(dim=1)[1]

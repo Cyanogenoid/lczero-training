@@ -59,7 +59,6 @@ class ShufflingDataLoader:
             self.processes.append(p)
             p.start()
 
-
     def shutdown(self):
         """
         Terminates all the workers
@@ -67,7 +66,6 @@ class ShufflingDataLoader:
         for process in self.processes:
             process.terminate()
             process.join()
-
 
     def task(self):
         """
@@ -78,7 +76,6 @@ class ShufflingDataLoader:
         for item in utils.grouper(chunkdatasrc, self.records_per_worker):
             self.queue.put(b''.join(item))
 
-
     def __iter__(self):
         """
         Read v3 records from child workers, shuffle, and yield
@@ -88,7 +85,7 @@ class ShufflingDataLoader:
         while True:
             records = self.queue.get()
             for i in range(self.records_per_worker):
-                s = records[i * self.struct_size : (i+1) * self.struct_size]
+                s = records[i * self.struct_size:(i+1) * self.struct_size]
                 s = sbuff.insert_or_replace(s)
                 if s is not None:
                     self.output_stack.append(s)

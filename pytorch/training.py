@@ -1,9 +1,6 @@
 import collections
-import copy
-import gzip
 import time
 import os
-from contextlib import contextmanager
 
 import torch
 import torch.nn as nn
@@ -164,16 +161,17 @@ class Session():
         '''
         # Move batch to the GPU
         input_planes, policy_target, value_target = batch
-        input_planes = input_planes.cuda(async=True)
-        policy_target = policy_target.cuda(async=True)
-        value_target = value_target.cuda(async=True)
+        input_planes = input_planes.cuda(non_blocking=True)
+        policy_target = policy_target.cuda(non_blocking=True)
+        value_target = value_target.cuda(non_blocking=True)
 
         # Forward batch through the network
         policy, value = self.net(input_planes)
 
         # Compute losses
         policy_logits = F.log_softmax(policy, dim=1)
-        policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
+        # this has the same gradient as cross-entropy
+        policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
         value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2

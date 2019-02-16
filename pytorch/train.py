@@ -1,5 +1,4 @@
 import argparse
-import os
 import yaml
 
 import training
@@ -13,9 +12,9 @@ def main(args):
     session = training.Session(cfg)
     try:
         checkpoint.resume(session, args.resume_from)
-    except OSError as e:
+    except OSError:
         print('Warning: could not resume from latest checkpoint')
-    session.train_loop() 
+    session.train_loop()
 
 
 if __name__ == '__main__':

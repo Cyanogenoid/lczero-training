@@ -65,7 +65,7 @@ class Net(nn.Module):
     def export_onnx(self, path):
         dummy_input = torch.randn(10, 112, 8, 8)
         input_names = ['input_planes']
-        output_names = [ 'policy_output', 'value_output']
+        output_names = ['policy_output', 'value_output']
         torch.onnx.export(self, dummy_input, path, input_names=input_names, output_names=output_names, verbose=True)
 
 

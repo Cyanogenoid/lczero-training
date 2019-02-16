@@ -1,16 +1,13 @@
 import glob
 import gzip
-import os
 import random
 import struct
-import itertools
 
 import torch
 import torch.utils.data as data
 import numpy as np
 
 import dataloader
-import utils
 
 
 V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
@@ -22,7 +19,8 @@ def v3_loader(path, batch_size, sample_method, sample_argument, shufflebuffer_si
         dataset,
         batch_size=batch_size,
         pin_memory=True,
-        # shufflebuffer isn't threadsafe, so only use one thread to do shufflebuffer work, parse v3 records, and form batches
+        # shufflebuffer isn't threadsafe, so only use one thread to
+        # do shufflebuffer work, parse v3 records, and form batches
         num_workers=1,
     )
     return loader
@@ -36,7 +34,11 @@ class Positions(data.Dataset):
         # infinite generator of positions
         position_loader = loop_positions(dataset)
         # multi-threaded data loader
-        loader = dataloader.ShufflingDataLoader(lambda: position_loader, shuffle_size=shufflebuffer_size, struct_size=V3_STRUCT.size)
+        loader = dataloader.ShufflingDataLoader(
+            lambda: position_loader,
+            shuffle_size=shufflebuffer_size,
+            struct_size=V3_STRUCT.size,
+        )
         # parse v3 records into PyTorch tensors
         loader = map(parse_v3, loader)
         # only include correctly parsed v3 records
@@ -53,7 +55,7 @@ class Positions(data.Dataset):
 def parse_v3(position):
     try:
         ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner = V3_STRUCT.unpack(position)
-    except:
+    except struct.error:
         return None
     move_count = 0
 
