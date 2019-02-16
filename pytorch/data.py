@@ -107,15 +107,15 @@ class Folder(data.Dataset):
 
 
 class RandomPosition():
-    def __init__(self, record_size, fixed=None, fixed_strict=None, every=None):
+    def __init__(self, record_size, fixed=None, fixed_strict=None, subsample=None):
         self.record_size = record_size
-        assert (fixed is not None) + (fixed_strict is not None) + (every is not None) == 1, 'can only specify one sampling ype'
+        assert (fixed is not None) + (fixed_strict is not None) + (subsample is not None) == 1, 'can only specify one sampling ype'
         if fixed is not None:
             self.sample = lambda chunk: self.sample_fixed(chunk, fixed)
         elif fixed_strict is not None:
             self.sample = lambda chunk: self.sample_fixed_strict(chunk, fixed_strict)
-        elif every is not None:
-            self.sample = lambda chunk: self.sample_every(chunk, every)
+        elif subsample is not None:
+            self.sample = lambda chunk: self.sample_subsample(chunk, subsample)
 
     def __call__(self, chunk):
         for pos in self.sample(chunk):
@@ -132,8 +132,8 @@ class RandomPosition():
         num_records = len(chunk) // self.record_size
         return random.choices(range(num_records), k=n)
 
-    def sample_every(self, chunk, nth):
-        """ Sample a varying number of records from a game, every nth on average """
+    def sample_subsample(self, chunk, nth):
+        """ Sample a varying number of records from a game, subsample every nth on average """
         num_records = len(chunk) // self.record_size
         for pos in range(num_records):
             if random.random() < 1/nth:
