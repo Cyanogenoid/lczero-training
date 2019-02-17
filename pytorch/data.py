@@ -206,15 +206,16 @@ class Protobuf():
             base += planes_per_position
 
         state = game.state[position_index]
-        planes[base + 0] = state.us_ooo
-        planes[base + 1] = state.us_oo
-        planes[base + 2] = state.them_ooo
-        planes[base + 3] = state.them_oo
-        planes[base + 4] = state.side_to_move
-        planes[base + 5] = state.rule_50
-        # Move count is no longer fed into the net
-        # planes[base + 6] = state.move_count
-        planes[base + 7] = 1
+        planes[base:base + 8] = torch.FloatTensor([
+            state.us_ooo,
+            state.us_oo,
+            state.them_ooo,
+            state.them_oo,
+            state.side_to_move,
+            state.rule_50,
+            0, # Move count is no longer fed into the net
+            1,
+        ]).unsqueeze(1)
 
         return planes.view(planes.size(0), 8, 8)
 
@@ -235,7 +236,8 @@ class Protobuf():
         ]
         if state.repetitions:
             bitstrings.append(int.from_bytes(b'\xFF' * 8, byteorder='little'))
-        planes.view(-1)[list(grouped_bit_indices(bitstrings))] = 1
+        indices = torch.LongTensor(list(grouped_bit_indices(bitstrings)))
+        planes.view(-1).scatter_(dim=0, index=indices, value=1)
 
 
 if __name__ == '__main__':
