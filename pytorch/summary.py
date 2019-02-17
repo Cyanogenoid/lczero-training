@@ -34,7 +34,7 @@ def policy_value_gradient_ratio(session, batch):
     session.cfg = copy.deepcopy(session.cfg)
     # store old metrics since we don't want what we're doing here to affect them
     old_metrics = session.metrics
-    session.metrics = collections.defaultdict(list)
+    session.metrics = metrics.MetricsManager()
 
     # compute policy gradient
     session.cfg['training']['policy_weight'] = 1.0

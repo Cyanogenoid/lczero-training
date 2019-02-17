@@ -63,8 +63,8 @@ class Session():
         next(iter(self.test_loader))
 
         # place to store and accumulate per-batch metrics
-        # use self.metric(key) to access, since these are results of possibly multiple virtual batches
-        self.metrics = collections.defaultdict(list)
+        # use self.metric[key] to access, since these are results of possibly multiple virtual batches
+        self.metrics = metrics.MetricsManager()
 
         # SummaryWriters to save metrics for tensorboard to display
         self.summary_path = os.path.join(cfg['logging']['directory'], cfg['name'])
@@ -95,8 +95,8 @@ class Session():
             time_nn_end = time.perf_counter()
 
             self.print_metrics(prefix='train')
-            self.log_metrics(self.train_writer)
-            self.reset_metrics()
+            metrics.log_session(self, self.train_writer)
+            self.metrics.reset_all()
 
             self.swa.update()
 
@@ -136,8 +136,8 @@ class Session():
                     summary.policy_value_gradient_ratio(self, batch)
                     break
         self.print_metrics(prefix=prefix)
-        self.log_metrics(self.test_writer)
-        self.reset_metrics()
+        metrics.log_session(self, self.test_writer)
+        self.metrics.reset_all()
         summary.policy_weight_skewness(self)
 
     def train_step(self, batch):
@@ -151,7 +151,7 @@ class Session():
                 split_loss = self.forward(split) / len(splits)
                 split_loss.backward()
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
-        self.metrics['gradient_norm'].append(gradient_norm)
+        self.metrics.update('gradient_norm', gradient_norm)
         self.lr_scheduler.step(self.step)
         self.optimizer.step()
         self.optimizer.zero_grad()
@@ -187,41 +187,19 @@ class Session():
             policy_target_entropy = metrics.entropy(policy_target)
 
         # store the metrics so that other functions have access to them
-        self.metrics['policy_loss'].append(policy_loss.item())
-        self.metrics['value_loss'].append(value_loss.item())
-        self.metrics['reg_loss'].append(reg_loss.item() * 1e-4)
-        self.metrics['total_loss'].append(total_loss.item())
-        self.metrics['policy_accuracy'].append(policy_accuracy.item() * 100)
-        self.metrics['value_accuracy'].append(value_accuracy.item() * 100)
-        self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
+        self.metrics.update('policy_loss', policy_loss.item())
+        self.metrics.update('value_loss', value_loss.item())
+        self.metrics.update('reg_loss', reg_loss.item() * 1e-4)
+        self.metrics.update('total_loss', total_loss.item())
+        self.metrics.update('policy_accuracy', policy_accuracy.item() * 100)
+        self.metrics.update('value_accuracy', value_accuracy.item() * 100)
+        self.metrics.update('policy_target_entropy', policy_target_entropy.item())
 
         return total_loss
 
-    def log_metrics(self, writer):
-        writer.add_scalar('loss/policy', self.metric('policy_loss'), global_step=self.step)
-        writer.add_scalar('loss/value', self.metric('value_loss'), global_step=self.step)
-        if writer == self.train_writer:
-            writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
-        writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
-        writer.add_scalar('metrics/policy_accuracy', self.metric('policy_accuracy'), global_step=self.step)
-        writer.add_scalar('metrics/value_accuracy', self.metric('value_accuracy'), global_step=self.step)
-        if writer == self.train_writer:  # target data comes from same distribution, so no point plotting it again
-            writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
-        if writer == self.train_writer:
-            writer.add_scalar('metrics/gradient_norm', self.metric('gradient_norm'), global_step=self.step)
-            writer.add_scalar('hyperparameter/learning_rate', self.lr_scheduler.get_lr()[0], global_step=self.step)
-        self.reset_metrics()
-
-    def metric(self, key):
-        return np.mean(self.metrics[key])
-
-    def reset_metrics(self):
-        for key in list(self.metrics.keys()):
-            self.metrics[key] = []
-
     def print_metrics(self, prefix):
         fields = ['total', 'policy', 'value', 'reg']
-        values = ['{:.4f}'.format(self.metric(f'{field}_loss')) for field in fields]
+        values = ['{:.4f}'.format(self.metrics[f'{field}_loss']) for field in fields]
         pairs = list(zip(fields, values))
         pairs.insert(0, ('step', self.step))
         formatted = (f'{field}={value}' for field, value in pairs)
