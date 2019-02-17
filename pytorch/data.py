@@ -220,7 +220,7 @@ class Protobuf():
             state.their_king,
         ]
         if state.repetitions:
-            bitstrings.append(int.from_bytes(b'\xFF' * 8, byteorder='little'))
+            bitstrings.append(0xFFFF_FFFF)
         indices = torch.LongTensor(list(utils.grouped_bit_indices(bitstrings)))
         planes.view(-1).scatter_(dim=0, index=indices, value=1)
 
