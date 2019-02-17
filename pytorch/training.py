@@ -75,14 +75,12 @@ class Session():
 
         self.step = 0
 
-        # TODO more tensorboard metrics, graph, histograms
+        # TODO more tensorboard metrics
         # TODO graceful shutdown
-        # TODO put data loader behind an mp.Queue and so that batching is not done on main thread
-        # TODO verify against jio net with se_ratio: 8, policy_channel:32, position sample rate 32
 
     def train_loop(self):
         print('Training...')
-        if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
+        if self.step_is_multiple('logging', 'test_every') and self.step > 0:
             self.test_epoch()
             self.swa.test_epoch()
 
@@ -94,25 +92,24 @@ class Session():
             self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
             time_nn_end = time.perf_counter()
 
-            self.print_metrics(prefix='train')
-            summary.log_session(self, self.train_writer)
-            self.metrics.reset_all()
-
-            self.swa.update()
-
-            if self.step_is_multiple(self.cfg['logging']['test_every']):
+            if self.step_is_multiple('logging', 'train_every'):
+                self.print_metrics(prefix='train')
+                summary.log_session(self, self.train_writer)
+                self.metrics.reset_all()
+            if self.step_is_multiple('training', 'swa_every'):
+                self.swa.update()
+            if self.step_is_multiple('logging', 'test_every'):
                 self.test_epoch()
                 self.swa.test_epoch()
-            if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
+            if self.step_is_multiple('training', 'checkpoint_every'):
                 checkpoint.save(self)
             if self.step == 1:
                 summary.model_graph(self)
-            if self.step_is_multiple(self.cfg['logging']['weight_histogram_every']):
+            if self.step_is_multiple('logging', 'weight_histogram_every'):
                 summary.weight_histograms(self)
 
-            if self.step_is_multiple(self.cfg['training']['total_steps']):
-                # done with training
-                break
+            if self.step_is_multiple('training', 'total_steps'):
+                break  # done with training
 
             # TODO refactor this
             time_step_end = time.perf_counter()
@@ -123,7 +120,7 @@ class Session():
             time_step_start = time.perf_counter()
 
         # only need to save end-of-training checkpoint if we haven't just checkpointed
-        if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
+        if not self.step_is_multiple('training', 'checkpoint_every'):
             checkpoint.save(self)
 
     def test_epoch(self, prefix='test'):
@@ -142,7 +139,7 @@ class Session():
     def train_step(self, batch):
         self.net.train()
         # only need to keep them around if we want to compute gradient ratio later
-        retain_grad_buffers = self.step_is_multiple(self.cfg['logging']['gradient_ratio_every'])
+        retain_grad_buffers = self.step_is_multiple('logging', 'gradient_ratio_every')
         if self.cfg['training']['batch_splits'] == 1:
             total_loss, loss_components = self.forward(batch)
             total_loss.backward(retain_graph=retain_grad_buffers)
@@ -156,7 +153,7 @@ class Session():
         self.optimizer.step()
         self.optimizer.zero_grad()
         self.metrics.update('gradient_norm', gradient_norm)
-        if self.step_is_multiple(self.cfg['logging']['gradient_ratio_every']):
+        if self.step_is_multiple('logging', 'gradient_ratio_every'):
             self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
@@ -208,5 +205,6 @@ class Session():
         formatted = (f'{field}={value}' for field, value in pairs)
         print(prefix.ljust(8), ', '.join(formatted))
 
-    def step_is_multiple(self, factor):
+    def step_is_multiple(self, category, option):
+        factor = self.cfg[category][option]
         return self.step % factor == 0
