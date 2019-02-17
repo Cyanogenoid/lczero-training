@@ -194,7 +194,7 @@ class GhostBatchNorm2d(nn.Module):
 
 def extract_weights(m):
     if isinstance(m, Net):
-        yield from extract_weights(m.input_conv)
+        yield from extract_weights(m.conv_block)
         for block in m.residual_stack:
             yield from extract_weights(block)
         yield from extract_weights(m.policy_head)
