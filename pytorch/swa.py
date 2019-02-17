@@ -1,7 +1,9 @@
 from contextlib import contextmanager
 import copy
 
+import torch
 from tensorboardX import SummaryWriter
+
 import utils
 
 
