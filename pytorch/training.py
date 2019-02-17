@@ -95,7 +95,7 @@ class Session():
             time_nn_end = time.perf_counter()
 
             self.print_metrics(prefix='train')
-            metrics.log_session(self, self.train_writer)
+            summary.log_session(self, self.train_writer)
             self.metrics.reset_all()
 
             self.swa.update()
@@ -133,28 +133,31 @@ class Session():
             for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
                 if i >= self.cfg['logging']['test_steps'] * self.cfg['training']['batch_splits']:
-                    summary.policy_value_gradient_ratio(self, batch)
                     break
         self.print_metrics(prefix=prefix)
-        metrics.log_session(self, self.test_writer)
+        summary.log_session(self, self.test_writer)
         self.metrics.reset_all()
         summary.policy_weight_skewness(self)
 
     def train_step(self, batch):
         self.net.train()
+        # only need to keep them around if we want to compute gradient ratio later
+        retain_grad_buffers = self.step_is_multiple(self.cfg['logging']['gradient_ratio_every'])
         if self.cfg['training']['batch_splits'] == 1:
-            total_loss = self.forward(batch)
-            total_loss.backward()
+            total_loss, loss_components = self.forward(batch)
+            total_loss.backward(retain_graph=retain_grad_buffers)
         else:
             splits = [torch.FloatTensor.chunk(x, self.cfg['training']['batch_splits']) for x in batch]
             for split in zip(*splits):
-                split_loss = self.forward(split) / len(splits)
-                split_loss.backward()
+                split_loss, loss_components = self.forward(split)
+                (split_loss / len(splits)).backward(retain_graph=retain_grad_buffers)
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
-        self.metrics.update('gradient_norm', gradient_norm)
         self.lr_scheduler.step(self.step)
         self.optimizer.step()
         self.optimizer.zero_grad()
+        self.metrics.update('gradient_norm', gradient_norm)
+        if self.step_is_multiple(self.cfg['logging']['gradient_ratio_every']):
+            self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation
@@ -195,7 +198,7 @@ class Session():
         self.metrics.update('value_accuracy', value_accuracy.item() * 100)
         self.metrics.update('policy_target_entropy', policy_target_entropy.item())
 
-        return total_loss
+        return total_loss, (policy_loss, value_loss, reg_loss)
 
     def print_metrics(self, prefix):
         fields = ['total', 'policy', 'value', 'reg']
