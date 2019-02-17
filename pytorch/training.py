@@ -83,6 +83,8 @@ class Session():
         if self.step_is_multiple('logging', 'test_every') and self.step > 0:
             self.test_epoch()
             self.swa.test_epoch()
+        if self.step == 0:
+            summary.model_graph(self)
 
         time_step_start = time.perf_counter()
         for batch in self.train_loader:
@@ -103,8 +105,6 @@ class Session():
                 self.swa.test_epoch()
             if self.step_is_multiple('training', 'checkpoint_every'):
                 checkpoint.save(self)
-            if self.step == 1:
-                summary.model_graph(self)
             if self.step_is_multiple('logging', 'weight_histogram_every'):
                 summary.weight_histograms(self)
 
