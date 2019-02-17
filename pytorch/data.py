@@ -190,23 +190,24 @@ class Protobuf():
     def build_policy(self, policy):
         targets = torch.zeros(1858)
         legals = torch.zeros(1858)
-        targets[policy.index] = torch.FloatTensor(policy.prior)
-        legals[policy.index] = 1
+        index = torch.LongTensor(policy.index)
+        targets.scatter_(dim=0, index=index, src=torch.FloatTensor(policy.prior))
+        legals.scatter_(dim=0, index=index, value=1)
         return targets, legals
 
     def build_input(self, game, position_index):
         planes_per_position = 13
         planes = torch.zeros(self.history * planes_per_position + 8, 64)
-        base = 0
+        index = 0
         for current_position in range(position_index, position_index - self.history, -1):
             if current_position < 0:
                 continue
             state = game.state[current_position]
-            self.build_position(planes[base:base + planes_per_position], state)
-            base += planes_per_position
+            self.build_position(planes[index:index + planes_per_position], state)
+            index += planes_per_position
 
         state = game.state[position_index]
-        planes[base:base + 8] = torch.FloatTensor([
+        planes[index:index + 8] = torch.FloatTensor([
             state.us_ooo,
             state.us_oo,
             state.them_ooo,
