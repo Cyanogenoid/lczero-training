@@ -14,49 +14,24 @@ def model_graph(session):
 
 def weight_histograms(session):
     for name, param in utils.named_variables(session.net.module):
+        if param.dtype == torch.int64:
+            continue
         if 'num_batches_tracked' in name:
             continue
         session.train_writer.add_histogram(f'weight/{name}', param.detach().cpu().numpy(), session.step)
 
 
-def policy_weight_skewness(session):
-    skewness = metrics.policy_weight_skewness(session.net)
-    session.test_writer.add_scalar('metrics/policy_weight_skewness', skewness, global_step=session.step)
-
-
-@torch.enable_grad()
-def policy_value_gradient_ratio(session, batch):
-    # don't do this for swa nets, since we don't compute gradients for them
-    if session.swa.active:
-        return
-    # store session cfg since we want to modify it in here
-    old_cfg = session.cfg
-    session.cfg = copy.deepcopy(session.cfg)
-    # store old metrics since we don't want what we're doing here to affect them
-    old_metrics = session.metrics
-    session.metrics = collections.defaultdict(list)
-
-    # compute policy gradient
-    session.cfg['training']['policy_weight'] = 1.0
-    session.cfg['training']['value_weight'] = 0.0
-    session.cfg['training']['reg_weight'] = 0.0
-    session.forward(batch).backward()
-    grads = torch.nn.utils.parameters_to_vector(p.grad for p in session.net.parameters())
-    policy_grad_norm = grads.norm(p=2).item()
-    session.optimizer.zero_grad()
-
-    # compute value gradient
-    session.cfg['training']['policy_weight'] = 0.0
-    session.cfg['training']['value_weight'] = 1.0
-    session.cfg['training']['reg_weight'] = 0.0
-    session.forward(batch).backward()
-    grads = torch.nn.utils.parameters_to_vector(p.grad for p in session.net.parameters())
-    value_grad_norm = grads.norm(p=2).item()
-    session.optimizer.zero_grad()
-
-    # ratio of the two
-    policy_value_ratio = policy_grad_norm / (policy_grad_norm + value_grad_norm)
-    session.test_writer.add_scalar('metrics/policy_value_gradient_ratio', policy_value_ratio, global_step=session.step)
-
-    session.cfg = old_cfg
-    session.metrics = old_metrics
+def log_session(session, writer):
+    # TODO better organisation of parent tags
+    writer.add_scalar('loss/policy', session.metrics['policy_loss'], global_step=session.step)
+    writer.add_scalar('loss/value', session.metrics['value_loss'], global_step=session.step)
+    if writer == session.train_writer:
+        writer.add_scalar('loss/weight', session.metrics['reg_loss'], global_step=session.step)
+    writer.add_scalar('loss/total', session.metrics['total_loss'], global_step=session.step)
+    writer.add_scalar('metrics/policy_accuracy', session.metrics['policy_accuracy'], global_step=session.step)
+    writer.add_scalar('metrics/value_accuracy', session.metrics['value_accuracy'], global_step=session.step)
+    if writer == session.train_writer:  # target data comes from same distribution, so no point plotting it again
+        writer.add_scalar('metrics/policy_target_entropy', session.metrics['policy_target_entropy'], global_step=session.step)
+        writer.add_scalar('metrics/gradient_norm', session.metrics['gradient_norm'], global_step=session.step)
+        writer.add_scalar('metrics/policy_value_gradient_ratio', session.metrics['policy_value_gradient_ratio'], global_step=session.step)
+        writer.add_scalar('hyperparameter/learning_rate', session.lr_scheduler.get_lr()[0], global_step=session.step)

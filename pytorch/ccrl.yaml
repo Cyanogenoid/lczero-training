@@ -1,19 +1,28 @@
 %YAML 1.2
 ---
 
-name: '256x20-sample32'
+name: '128x10-azpol'
 
 dataset:
-    train_path: 'data/v3/train/*'
-    test_path: 'data/v3/test/*'
+    # paths of training chunks to include
+    train_path: 'data/v3/train/*.gz'
+    test_path: 'data/v3/test/*.gz'
+
+    # one of {'fixed', 'fixed_strict', 'every'}
+    # 'fixed' samples a fixed number of unique positions per game, but allows for fewer if the game is too short
+    # 'fixed_strict' always samples a fixed number of positions per game, but may contain duplicate positions
+    # 'every' samples positions with some downsampling rate, so longer games are more likely to be sampled from
+    # sample_argument specifies the positions per game for the 'fixed' and 'fixed_strict', and the downsampling rate for 'every'
+    sample_method: 'subsample'
+    sample_argument: 32
+
+    # number of sampled positions to store in the shufflebuffer
+    shufflebuffer_size: 250_000
 
 training:
     total_steps: 200_000
     batch_size: 1024
     batch_splits: 1
-
-    shufflebuffer_size: 250_000
-    positions_per_game: 4
 
     lr:
         # warmup
@@ -43,15 +52,19 @@ training:
     checkpoint_every: 10000
     checkpoint_directory: 'checkpoints'
 
+    swa_every: 10
     swa_momentum: 0.99
 
 model:
-    residual_channels: 256
-    residual_blocks: 20
-    policy_channels: 32
+    residual_channels: 128
+    residual_blocks: 10
+    policy_channels: 128
     se_ratio: 8
 
 logging:
     directory: 'runs'
+    train_every: 100
     test_steps: 25
     test_every: 500
+    weight_histogram_every: 1000
+    gradient_ratio_every: 100

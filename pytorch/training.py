@@ -1,9 +1,6 @@
 import collections
-import copy
-import gzip
 import time
 import os
-from contextlib import contextmanager
 
 import torch
 import torch.nn as nn
@@ -46,15 +43,17 @@ class Session():
         self.train_loader = data.v3_loader(
             path=cfg['dataset']['train_path'],
             batch_size=batch_size,
-            shufflebuffer_size=cfg['training']['shufflebuffer_size'],
-            positions_per_game=cfg['training']['positions_per_game'],
+            shufflebuffer_size=cfg['dataset']['shufflebuffer_size'],
+            sample_method=cfg['dataset']['sample_method'],
+            sample_argument=cfg['dataset']['sample_argument'],
         )
         self.test_loader = data.v3_loader(
             path=cfg['dataset']['test_path'],
             # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
             batch_size=batch_size // cfg['training']['batch_splits'],
-            shufflebuffer_size=cfg['training']['shufflebuffer_size'],
-            positions_per_game=cfg['training']['positions_per_game'],
+            shufflebuffer_size=cfg['dataset']['shufflebuffer_size'],
+            sample_method=cfg['dataset']['sample_method'],
+            sample_argument=cfg['dataset']['sample_argument'],
         )
         t0 = time.perf_counter()
         print('Prefetching data...')
@@ -64,8 +63,8 @@ class Session():
         next(iter(self.test_loader))
 
         # place to store and accumulate per-batch metrics
-        # use self.metric(key) to access, since these are results of possibly multiple virtual batches
-        self.metrics = collections.defaultdict(list)
+        # use self.metric[key] to access, since these are results of possibly multiple virtual batches
+        self.metrics = metrics.MetricsManager()
 
         # SummaryWriters to save metrics for tensorboard to display
         self.summary_path = os.path.join(cfg['logging']['directory'], cfg['name'])
@@ -76,16 +75,16 @@ class Session():
 
         self.step = 0
 
-        # TODO more tensorboard metrics, graph, histograms
+        # TODO more tensorboard metrics
         # TODO graceful shutdown
-        # TODO put data loader behind an mp.Queue and so that batching is not done on main thread
-        # TODO verify against jio net with se_ratio: 8, policy_channel:32, position sample rate 32
 
     def train_loop(self):
         print('Training...')
-        if self.step_is_multiple(self.cfg['logging']['test_every']) and self.step > 0:
+        if self.step_is_multiple('logging', 'test_every') and self.step > 0:
             self.test_epoch()
             self.swa.test_epoch()
+        if self.step == 0:
+            summary.model_graph(self)
 
         time_step_start = time.perf_counter()
         for batch in self.train_loader:
@@ -95,25 +94,22 @@ class Session():
             self.step += 1  # TODO decide on best place to increment step. before train? here? after test? end?
             time_nn_end = time.perf_counter()
 
-            self.print_metrics(prefix='train')
-            self.log_metrics(self.train_writer)
-            self.reset_metrics()
-
-            self.swa.update()
-
-            if self.step_is_multiple(self.cfg['logging']['test_every']):
+            if self.step_is_multiple('logging', 'train_every'):
+                self.print_metrics(prefix='train')
+                summary.log_session(self, self.train_writer)
+                self.metrics.reset_all()
+            if self.step_is_multiple('training', 'swa_every'):
+                self.swa.update()
+            if self.step_is_multiple('logging', 'test_every'):
                 self.test_epoch()
                 self.swa.test_epoch()
-            if self.step_is_multiple(self.cfg['training']['checkpoint_every']):
+            if self.step_is_multiple('training', 'checkpoint_every'):
                 checkpoint.save(self)
-            if self.step == 1:
-                summary.model_graph(self)
-            if self.step_is_multiple(self.cfg['logging']['weight_histogram_every']):
+            if self.step_is_multiple('logging', 'weight_histogram_every'):
                 summary.weight_histograms(self)
 
-            if self.step_is_multiple(self.cfg['training']['total_steps']):
-                # done with training
-                break
+            if self.step_is_multiple('training', 'total_steps'):
+                break  # done with training
 
             # TODO refactor this
             time_step_end = time.perf_counter()
@@ -124,7 +120,7 @@ class Session():
             time_step_start = time.perf_counter()
 
         # only need to save end-of-training checkpoint if we haven't just checkpointed
-        if not self.step_is_multiple(self.cfg['training']['checkpoint_every']):
+        if not self.step_is_multiple('training', 'checkpoint_every'):
             checkpoint.save(self)
 
     def test_epoch(self, prefix='test'):
@@ -134,45 +130,48 @@ class Session():
             for i, batch in enumerate(self.test_loader):
                 self.forward(batch)
                 if i >= self.cfg['logging']['test_steps'] * self.cfg['training']['batch_splits']:
-                    summary.policy_value_gradient_ratio(self, batch)
                     break
         self.print_metrics(prefix=prefix)
-        self.log_metrics(self.test_writer)
-        self.reset_metrics()
-        summary.policy_weight_skewness(self)
+        summary.log_session(self, self.test_writer)
+        self.metrics.reset_all()
 
     def train_step(self, batch):
         self.net.train()
+        # only need to keep them around if we want to compute gradient ratio later
+        retain_grad_buffers = self.step_is_multiple('logging', 'gradient_ratio_every')
         if self.cfg['training']['batch_splits'] == 1:
-            total_loss = self.forward(batch)
-            total_loss.backward()
+            total_loss, loss_components = self.forward(batch)
+            total_loss.backward(retain_graph=retain_grad_buffers)
         else:
             splits = [torch.FloatTensor.chunk(x, self.cfg['training']['batch_splits']) for x in batch]
             for split in zip(*splits):
-                split_loss = self.forward(split) / len(splits)
-                split_loss.backward()
+                split_loss, loss_components = self.forward(split)
+                (split_loss / len(splits)).backward(retain_graph=retain_grad_buffers)
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
-        self.metrics['gradient_norm'].append(gradient_norm)
         self.lr_scheduler.step(self.step)
         self.optimizer.step()
         self.optimizer.zero_grad()
+        self.metrics.update('gradient_norm', gradient_norm)
+        if self.step_is_multiple('logging', 'gradient_ratio_every'):
+            self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation
         '''
         # Move batch to the GPU
         input_planes, policy_target, value_target = batch
-        input_planes = input_planes.cuda(async=True)
-        policy_target = policy_target.cuda(async=True)
-        value_target = value_target.cuda(async=True)
+        input_planes = input_planes.cuda(non_blocking=True)
+        policy_target = policy_target.cuda(non_blocking=True)
+        value_target = value_target.cuda(non_blocking=True)
 
         # Forward batch through the network
         policy, value = self.net(input_planes)
 
         # Compute losses
         policy_logits = F.log_softmax(policy, dim=1)
-        policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')  # this has the same gradient as cross-entropy
-        value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
+        # this has the same gradient as cross-entropy
+        policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
+        value_loss = F.cross_entropy(value, value_target)
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
@@ -182,47 +181,29 @@ class Session():
 
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
-            policy_accuracy = metrics.accuracy(policy, policy_target)
+            policy_accuracy = metrics.accuracy(policy, vector=policy_target)
+            value_accuracy = metrics.accuracy(value, index=value_target)
             policy_target_entropy = metrics.entropy(policy_target)
 
         # store the metrics so that other functions have access to them
-        self.metrics['policy_loss'].append(policy_loss.item())
-        self.metrics['value_loss'].append(value_loss.item() / 4)
-        self.metrics['reg_loss'].append(reg_loss.item() * 1e-4)
-        self.metrics['total_loss'].append(total_loss.item())
-        self.metrics['policy_accuracy'].append(policy_accuracy.item() * 100)
-        self.metrics['policy_target_entropy'].append(policy_target_entropy.item())
+        self.metrics.update('policy_loss', policy_loss.item())
+        self.metrics.update('value_loss', value_loss.item())
+        self.metrics.update('reg_loss', reg_loss.item() * 1e-4)
+        self.metrics.update('total_loss', total_loss.item())
+        self.metrics.update('policy_accuracy', policy_accuracy.item() * 100)
+        self.metrics.update('value_accuracy', value_accuracy.item() * 100)
+        self.metrics.update('policy_target_entropy', policy_target_entropy.item())
 
-        return total_loss
-
-    def log_metrics(self, writer):
-        writer.add_scalar('loss/policy', self.metric('policy_loss'), global_step=self.step)
-        writer.add_scalar('loss/value', self.metric('value_loss'), global_step=self.step)
-        if writer == self.train_writer:
-            writer.add_scalar('loss/weight', self.metric('reg_loss'), global_step=self.step)
-        writer.add_scalar('loss/total', self.metric('total_loss'), global_step=self.step)
-        writer.add_scalar('metrics/policy_accuracy', self.metric('policy_accuracy'), global_step=self.step)
-        if writer == self.train_writer:  # target data comes from same distribution, so no point plotting it again
-            writer.add_scalar('metrics/policy_target_entropy', self.metric('policy_target_entropy'), global_step=self.step)
-        if writer == self.train_writer:
-            writer.add_scalar('metrics/gradient_norm', self.metric('gradient_norm'), global_step=self.step)
-            writer.add_scalar('hyperparameter/learning_rate', self.lr_scheduler.get_lr()[0], global_step=self.step)
-        self.reset_metrics()
-
-    def metric(self, key):
-        return np.mean(self.metrics[key])
-
-    def reset_metrics(self):
-        for key in list(self.metrics.keys()):
-            self.metrics[key] = []
+        return total_loss, (policy_loss, value_loss, reg_loss)
 
     def print_metrics(self, prefix):
         fields = ['total', 'policy', 'value', 'reg']
-        values = ['{:.4f}'.format(self.metric(f'{field}_loss')) for field in fields]
+        values = ['{:.4f}'.format(self.metrics[f'{field}_loss']) for field in fields]
         pairs = list(zip(fields, values))
         pairs.insert(0, ('step', self.step))
         formatted = (f'{field}={value}' for field, value in pairs)
         print(prefix.ljust(8), ', '.join(formatted))
 
-    def step_is_multiple(self, factor):
+    def step_is_multiple(self, category, option):
+        factor = self.cfg[category][option]
         return self.step % factor == 0
