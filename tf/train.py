@@ -108,7 +108,7 @@ def main(cmd):
     train_parser = ChunkParser(FileDataSrc(train_chunks),
             shuffle_size=shuffle_size, sample=SKIP, batch_size=ChunkParser.BATCH_SIZE)
     dataset = tf.data.Dataset.from_generator(
-        train_parser.parse, output_types=(tf.string, tf.string, tf.string))
+        train_parser.parse, output_types=(tf.string, tf.string, tf.string, tf.string))
     dataset = dataset.map(ChunkParser.parse_function)
     dataset = dataset.prefetch(4)
     train_iterator = dataset.make_one_shot_iterator()
@@ -117,7 +117,7 @@ def main(cmd):
     test_parser = ChunkParser(FileDataSrc(test_chunks),
             shuffle_size=shuffle_size, sample=SKIP, batch_size=ChunkParser.BATCH_SIZE)
     dataset = tf.data.Dataset.from_generator(
-        test_parser.parse, output_types=(tf.string, tf.string, tf.string))
+        test_parser.parse, output_types=(tf.string, tf.string, tf.string, tf.string))
     dataset = dataset.map(ChunkParser.parse_function)
     dataset = dataset.prefetch(4)
     test_iterator = dataset.make_one_shot_iterator()
@@ -129,11 +129,13 @@ def main(cmd):
         cp = tf.train.latest_checkpoint(root_dir)
         tfprocess.restore(cp)
 
-    # Sweeps through all test chunks statistically
+    # If number of test positions is not given
+    # sweeps through all test chunks statistically
     # Assumes average of 10 samples per test game.
     # For simplicity, testing can use the split batch size instead of total batch size.
     # This does not affect results, because test results are simple averages that are independent of batch size.
-    num_evals = num_test*10 // ChunkParser.BATCH_SIZE
+    num_evals = cfg['training'].get('num_test_positions', num_test * 10)
+    num_evals = max(1, num_evals // ChunkParser.BATCH_SIZE)
     print("Using {} evaluation batches".format(num_evals))
 
     tfprocess.process_loop(total_batch_size, num_evals, batch_splits=batch_splits)
