@@ -182,11 +182,8 @@ class Protobuf():
     def build_policy(self, policy):
         targets = torch.zeros(1858)
         legals = torch.zeros(1858)
-        priors = policy.prior
-        indices = policy.index
-        for index, prior in zip(indices, priors):
-            targets[index] = prior
-            legals[index] = 1
+        targets[policy.index] = torch.FloatTensor(policy.prior)
+        legals[policy.index] = 1
         return targets, legals
 
     def build_input(self, game, position_index):
@@ -231,9 +228,7 @@ class Protobuf():
     def build_plane(self, plane, bitstring, mirror=False):
         if mirror:
             bitstring = mirror(bitstring)
-        for i in bit_indices(bitstring):
-            plane[i] = 1
-        return plane
+        plane[list(bit_indices(bitstring))] = 1
 
 
 if __name__ == '__main__':
