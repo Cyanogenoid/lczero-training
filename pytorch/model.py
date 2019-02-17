@@ -86,7 +86,7 @@ class PolicyHead(nn.Module):
         super().__init__()
         self.conv_block = ConvBlock(in_channels, 80, 3, padding=1)
         # fixed mapping from az conv output to lc0 policy
-        self.policy_map = self.create_gather_tensor()
+        self.register_buffer('policy_map', self.create_gather_tensor())
 
     def create_gather_tensor(self):
         lc0_to_az_indices = dict(enumerate(lc0_az_policy_map.make_map('index')))
@@ -97,7 +97,7 @@ class PolicyHead(nn.Module):
     def forward(self, x):
         x = self.conv_block(x)
         x = x.view(x.size(0), -1)
-        x = x.gather(dim=1, index=self.policy_map)
+        x = x.gather(dim=1, index=self.policy_map.expand(x.size(0), self.policy_map.size(1)))
         return x
 
 
@@ -201,6 +201,9 @@ def extract_weights(m):
     elif isinstance(m, SqueezeExcitation):
         yield from extract_weights(m.lin1)
         yield from extract_weights(m.lin2)
+
+    elif isinstance(m, PolicyHead):
+        yield from extract_weights(m.conv_block)
 
     elif isinstance(m, nn.Sequential):
         for layer in m:
