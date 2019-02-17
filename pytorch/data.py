@@ -8,6 +8,7 @@ import torch.utils.data as data
 import numpy as np
 
 import dataloader
+import proto.chunk_pb2 as chunk_pb2
 
 
 V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
@@ -143,3 +144,115 @@ class RandomPosition():
         start = number * self.record_size
         end = (number + 1) * self.record_size
         return chunk[start:end]
+
+
+def bit_indices(n):
+    index = 0
+    while n:
+        if n & 1:
+            yield index
+        n >>= 1
+        index += 1
+
+
+class Protobuf():
+    def __init__(self, history):
+        self.history = history
+
+    def __call__(self, data):
+        chunk = chunk_pb2.Chunk.FromString(data)
+        game = chunk.game[0]  # assumes 1 game per chunk
+        # select random position
+        position_index = random.randrange(len(game.state))
+        side_to_move = game.state[position_index].side_to_move  # 0 if white, 1 if black
+
+        wdl = self.build_wdl(game, side_to_move)
+        policy, legals = self.build_policy(game.policy[position_index])
+        planes = self.build_input(game, position_index)
+        return planes, policy, wdl
+
+    def build_wdl(self, game, side_to_move):
+        if game.result == chunk_pb2.Game.Result.Value('DRAW'):
+           return [0, 1, 0]
+        # only true when winner is white and playing as white, or winner is black and playing as black
+        if (game.result == chunk_pb2.Game.Result.Value('WHITE')) != side_to_move:
+            return [1, 0, 0]
+        return [0, 0, 1]
+
+    def build_policy(self, policy):
+        targets = torch.zeros(1858)
+        legals = torch.zeros(1858)
+        priors = policy.prior
+        indices = policy.index
+        for index, prior in zip(indices, priors):
+            targets[index] = prior
+            legals[index] = 1
+        return targets, legals
+
+    def build_input(self, game, position_index):
+        planes_per_position = 13
+        planes = torch.zeros(self.history * planes_per_position + 8, 64)
+        base = 0
+        for current_position in range(position_index, position_index - self.history, -1):
+            if current_position < 0:
+                continue
+            state = game.state[current_position]
+            self.build_position(planes[base:base + planes_per_position], state)
+            base += planes_per_position
+
+        state = game.state[position_index]
+        planes[base + 0] = state.us_ooo
+        planes[base + 1] = state.us_oo
+        planes[base + 2] = state.them_ooo
+        planes[base + 3] = state.them_oo
+        planes[base + 4] = state.side_to_move
+        planes[base + 5] = state.rule_50
+        # Move count is no longer fed into the net
+        # planes[base + 6] = state.move_count
+        planes[base + 7] = 1
+
+        return planes.view(planes.size(0), 8, 8)
+
+    def build_position(self, planes, state, mirror=False):
+        self.build_plane(planes[0], state.our_pawns, mirror)
+        self.build_plane(planes[1], state.our_knights, mirror)
+        self.build_plane(planes[2], state.our_bishops, mirror)
+        self.build_plane(planes[3], state.our_rooks, mirror)
+        self.build_plane(planes[4], state.our_queens, mirror)
+        self.build_plane(planes[5], state.our_king, mirror)
+        self.build_plane(planes[6], state.our_pawns, mirror)
+        self.build_plane(planes[7], state.our_knights, mirror)
+        self.build_plane(planes[8], state.our_bishops, mirror)
+        self.build_plane(planes[9], state.our_rooks, mirror)
+        self.build_plane(planes[10], state.our_queens, mirror)
+        self.build_plane(planes[11], state.our_king, mirror)
+        planes[12] = state.repetitions
+
+    def build_plane(self, plane, bitstring, mirror=False):
+        if mirror:
+            bitstring = mirror(bitstring)
+        for i in bit_indices(bitstring):
+            plane[i] = 1
+        return plane
+
+
+if __name__ == '__main__':
+    import gzip
+    import time
+    p = Protobuf(history=8)
+    t0 = time.perf_counter()
+    for _ in range(1_000):
+        with gzip.open('game_000000.gz', 'rb') as fd:
+        #with open('game_000000', 'rb') as fd:
+            a = p(fd.read())
+    t1 = time.perf_counter()
+    print(t1 - t0)
+
+    rp = RandomPosition(V3_STRUCT.size, fixed=1)
+    t0 = time.perf_counter()
+    for _ in range(1_000):
+        #with gzip.open('training.1.gz', 'rb') as fd:
+        with open('training.1', 'rb') as fd:
+            a = parse_v3(next(rp(fd.read())))
+    t1 = time.perf_counter()
+    print(t1 - t0)
