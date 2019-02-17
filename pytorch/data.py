@@ -8,6 +8,7 @@ import torch.utils.data as data
 import numpy as np
 
 import dataloader
+import utils
 import proto.chunk_pb2 as chunk_pb2
 
 
@@ -146,23 +147,6 @@ class RandomPosition():
         return chunk[start:end]
 
 
-def bit_indices(n):
-    index = 0
-    while n:
-        if n & 1:
-            yield index
-        n >>= 1
-        index += 1
-
-
-def grouped_bit_indices(ns, group_size=64):
-    offset = 0
-    for n in ns:
-        for index in bit_indices(n):
-            yield offset + index
-        offset += group_size
-
-
 class Protobuf():
     def __init__(self, history):
         self.history = history
@@ -237,7 +221,7 @@ class Protobuf():
         ]
         if state.repetitions:
             bitstrings.append(int.from_bytes(b'\xFF' * 8, byteorder='little'))
-        indices = torch.LongTensor(list(grouped_bit_indices(bitstrings)))
+        indices = torch.LongTensor(list(utils.grouped_bit_indices(bitstrings)))
         planes.view(-1).scatter_(dim=0, index=indices, value=1)
 
 
@@ -246,18 +230,20 @@ if __name__ == '__main__':
     import time
     p = Protobuf(history=8)
     t0 = time.perf_counter()
-    for _ in range(1_000):
+    for _ in range(2_000):
         with gzip.open('game_000000.gz', 'rb') as fd:
         #with open('game_000000', 'rb') as fd:
             a = p(fd.read())
     t1 = time.perf_counter()
     print(t1 - t0)
 
+    '''
     rp = RandomPosition(V3_STRUCT.size, fixed=1)
     t0 = time.perf_counter()
     for _ in range(1_000):
-        #with gzip.open('training.1.gz', 'rb') as fd:
-        with open('training.1', 'rb') as fd:
+        with gzip.open('training.1.gz', 'rb') as fd:
+        #with open('training.1', 'rb') as fd:
             a = parse_v3(next(rp(fd.read())))
     t1 = time.perf_counter()
     print(t1 - t0)
+    '''
