@@ -155,6 +155,14 @@ def bit_indices(n):
         index += 1
 
 
+def grouped_bit_indices(ns, group_size=64):
+    offset = 0
+    for n in ns:
+        for index in bit_indices(n):
+            yield offset + index
+        offset += group_size
+
+
 class Protobuf():
     def __init__(self, history):
         self.history = history
@@ -211,24 +219,23 @@ class Protobuf():
         return planes.view(planes.size(0), 8, 8)
 
     def build_position(self, planes, state, mirror=False):
-        self.build_plane(planes[0], state.our_pawns, mirror)
-        self.build_plane(planes[1], state.our_knights, mirror)
-        self.build_plane(planes[2], state.our_bishops, mirror)
-        self.build_plane(planes[3], state.our_rooks, mirror)
-        self.build_plane(planes[4], state.our_queens, mirror)
-        self.build_plane(planes[5], state.our_king, mirror)
-        self.build_plane(planes[6], state.our_pawns, mirror)
-        self.build_plane(planes[7], state.our_knights, mirror)
-        self.build_plane(planes[8], state.our_bishops, mirror)
-        self.build_plane(planes[9], state.our_rooks, mirror)
-        self.build_plane(planes[10], state.our_queens, mirror)
-        self.build_plane(planes[11], state.our_king, mirror)
-        planes[12] = state.repetitions
-
-    def build_plane(self, plane, bitstring, mirror=False):
-        if mirror:
-            bitstring = mirror(bitstring)
-        plane[list(bit_indices(bitstring))] = 1
+        bitstrings = [
+            state.our_pawns,
+            state.our_knights,
+            state.our_bishops,
+            state.our_rooks,
+            state.our_queens,
+            state.our_king,
+            state.their_pawns,
+            state.their_knights,
+            state.their_bishops,
+            state.their_rooks,
+            state.their_queens,
+            state.their_king,
+        ]
+        if state.repetitions:
+            bitstrings.append(int.from_bytes(b'\xFF' * 8, byteorder='little'))
+        planes.view(-1)[list(grouped_bit_indices(bitstrings))] = 1
 
 
 if __name__ == '__main__':
