@@ -84,7 +84,8 @@ class Net(nn.Module):
 class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):
         super().__init__()
-        self.conv_block = ConvBlock(in_channels, 80, 3, padding=1)
+        self.conv_block = ConvBlock(in_channels, policy_channels, 3, padding=1)
+        self.conv = nn.Conv2d(policy_channels, 80, 3, padding=1)
         # fixed mapping from az conv output to lc0 policy
         self.register_buffer('policy_map', self.create_gather_tensor())
 
@@ -96,6 +97,7 @@ class PolicyHead(nn.Module):
 
     def forward(self, x):
         x = self.conv_block(x)
+        x = self.conv(x)
         x = x.view(x.size(0), -1)
         x = x.gather(dim=1, index=self.policy_map.expand(x.size(0), self.policy_map.size(1)))
         return x
@@ -204,6 +206,7 @@ def extract_weights(m):
 
     elif isinstance(m, PolicyHead):
         yield from extract_weights(m.conv_block)
+        yield from extract_weights(m.conv)
 
     elif isinstance(m, nn.Sequential):
         for layer in m:
