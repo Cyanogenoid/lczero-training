@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.init as init
 
 import net as proto_net
+import proto.net_pb2 as pb
 
 
 class Net(nn.Module):
@@ -50,12 +51,22 @@ class Net(nn.Module):
     def export_proto(self, path):
         weights = [w.detach().cpu().numpy() for w in extract_weights(self)]
         weights[0][:, 109, :, :] /= 99  # scale rule50 weights due to legacy reasons
-        proto = proto_net.Net()
-        proto.fill_net(weights, se=True)
+        proto = proto_net.Net(
+            net=pb.NetworkFormat.NETWORK_SE_WITH_HEADFORMAT,
+            input=pb.NetworkFormat.INPUT_CLASSICAL_112_PLANE,
+            value=pb.NetworkFormat.VALUE_WDL,
+            policy=pb.NetworkFormat.POLICY_CONVOLUTION,
+        )
+        proto.fill_net(weights)
         proto.save_proto(path)
 
     def import_proto(self, path):
-        proto = proto_net.Net()
+        proto = proto_net.Net(
+            net=pb.NetworkFormat.NETWORK_SE_WITH_HEADFORMAT,
+            input=pb.NetworkFormat.INPUT_CLASSICAL_112_PLANE,
+            value=pb.NetworkFormat.VALUE_WDL,
+            policy=pb.NetworkFormat.POLICY_CONVOLUTION,
+        )
         proto.parse_proto(path)
         weights = proto.get_weights()
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
