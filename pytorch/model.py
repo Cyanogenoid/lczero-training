@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 
+import lc0_az_policy_map
 import net as proto_net
 import proto.net_pb2 as pb
 
@@ -13,7 +14,7 @@ class Net(nn.Module):
         super().__init__()
         channels = residual_channels
 
-        self.input_conv = ConvBlock(112, channels, 3, padding=1)
+        self.conv_block = ConvBlock(112, channels, 3, padding=1)
 
         blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
@@ -34,7 +35,7 @@ class Net(nn.Module):
                 init.zeros_(module.bias)
 
     def forward(self, x):
-        x = self.input_conv(x)
+        x = self.conv_block(x)
         x = self.residual_stack(x)
 
         policy = self.policy_head(x)
@@ -71,7 +72,7 @@ class Net(nn.Module):
         weights = proto.get_weights()
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
             model_weight[:] = torch.from_numpy(loaded_weight).view_as(model_weight)
-        self.input_conv.layers[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
+        self.conv_block.layers[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
 
     def export_onnx(self, path):
         dummy_input = torch.randn(10, 112, 8, 8)
@@ -80,13 +81,24 @@ class Net(nn.Module):
         torch.onnx.export(self, dummy_input, path, input_names=input_names, output_names=output_names, verbose=True)
 
 
-class PolicyHead(nn.Sequential):
+class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):
-        super().__init__(OrderedDict([
-            ('conv_block', ConvBlock(in_channels, policy_channels, 1)),
-            ('flatten', Flatten()),
-            ('lin', nn.Linear(8 * 8 * policy_channels, 1858)),
-        ]))
+        super().__init__()
+        self.conv_block = ConvBlock(in_channels, 80, 3, padding=1)
+        # fixed mapping from az conv output to lc0 policy
+        self.policy_map = self.create_gather_tensor()
+
+    def create_gather_tensor(self):
+        lc0_to_az_indices = dict(enumerate(lc0_az_policy_map.make_map('index')))
+        az_to_lc0_indices = {az: lc0 for lc0, az in lc0_to_az_indices.items()}
+        gather_indices = [lc0 for az, lc0 in sorted(az_to_lc0_indices.items()) if az != -1]
+        return torch.LongTensor(gather_indices).unsqueeze(0)
+
+    def forward(self, x):
+        x = self.conv_block(x)
+        x = x.view(x.size(0), -1)
+        x = x.gather(dim=1, index=self.policy_map)
+        return x
 
 
 class ValueHead(nn.Sequential):
