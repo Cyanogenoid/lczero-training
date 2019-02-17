@@ -134,7 +134,6 @@ class Session():
         self.print_metrics(prefix=prefix)
         summary.log_session(self, self.test_writer)
         self.metrics.reset_all()
-        summary.policy_weight_skewness(self)
 
     def train_step(self, batch):
         self.net.train()

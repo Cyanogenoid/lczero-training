@@ -14,15 +14,11 @@ def model_graph(session):
 
 def weight_histograms(session):
     for name, param in utils.named_variables(session.net.module):
+        if param.dtype == torch.int64:
+            continue
         if 'num_batches_tracked' in name:
             continue
         session.train_writer.add_histogram(f'weight/{name}', param.detach().cpu().numpy(), session.step)
-
-
-def policy_weight_skewness(session):
-    policy_weight = session.net.module.policy_head.lin.weight
-    skewness = metrics.skewness(policy_weight)
-    session.test_writer.add_scalar('metrics/policy_weight_skewness', skewness, global_step=session.step)
 
 
 def log_session(session, writer):

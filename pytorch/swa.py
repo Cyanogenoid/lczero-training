@@ -31,6 +31,8 @@ class SWA():
         if not self.enabled:
             return
         for swa, base in zip(utils.variables(self.net), utils.variables(self.session.net)):
+            if swa.dtype == torch.int64:
+                continue  # only apply to things that can be averaged
             # exponential moving average without bias correction
             # just don't use the swa nets early on and everything is ok
             swa.data = self.momentum * swa + (1 - self.momentum) * base.detach()

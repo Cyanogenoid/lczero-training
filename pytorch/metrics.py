@@ -63,12 +63,3 @@ def accuracy(predicted, vector=None, index=None):
 def entropy(distribution):
     per_element = -distribution * distribution.clamp(min=1e-20).log()
     return per_element.mean(dim=0).sum()
-
-
-def skewness(weight):
-    # ttps://en.wikipedia.org/wiki/Skewness#Pearson's_moment_coefficient_of_skewness
-    weight_mean = weight.mean()
-    moment = weight - weight_mean
-    kappa_2 = moment.pow(2).mean()
-    kappa_3 = moment.pow(3).mean()
-    return kappa_3 / kappa_2.pow(1.5)
