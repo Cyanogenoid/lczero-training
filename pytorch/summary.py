@@ -20,7 +20,8 @@ def weight_histograms(session):
 
 
 def policy_weight_skewness(session):
-    skewness = metrics.policy_weight_skewness(session.net)
+    policy_weight = session.net.module.policy_head.lin.weight
+    skewness = metrics.skewness(policy_weight)
     session.test_writer.add_scalar('metrics/policy_weight_skewness', skewness, global_step=session.step)
 
 
