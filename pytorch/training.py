@@ -1,12 +1,11 @@
-import collections
 import time
 import os
+import multiprocessing
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import numpy as np
 from tensorboardX import SummaryWriter
 
 import data
@@ -40,20 +39,15 @@ class Session():
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
 
-        self.train_loader = data.v3_loader(
+        threads = multiprocessing.cpu_count()
+        self.train_loader = data.data_loader(
             path=cfg['dataset']['train_path'],
             batch_size=batch_size,
-            shufflebuffer_size=cfg['dataset']['shufflebuffer_size'],
-            sample_method=cfg['dataset']['sample_method'],
-            sample_argument=cfg['dataset']['sample_argument'],
         )
-        self.test_loader = data.v3_loader(
+        self.test_loader = data.data_loader(
             path=cfg['dataset']['test_path'],
             # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
             batch_size=batch_size // cfg['training']['batch_splits'],
-            shufflebuffer_size=cfg['dataset']['shufflebuffer_size'],
-            sample_method=cfg['dataset']['sample_method'],
-            sample_argument=cfg['dataset']['sample_argument'],
         )
         t0 = time.perf_counter()
         print('Prefetching data...')
