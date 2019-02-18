@@ -9,15 +9,19 @@ import utils
 import proto.chunk_pb2 as chunk_pb2
 
 
-def data_loader(path, batch_size, sample_method, sample_argument, shufflebuffer_size, num_workers=0):
+def data_loader(path, batch_size, num_workers=0):
     dataset = Folder(path, transform=Protobuf(history=8))
     loader = data.DataLoader(
         dataset,
         batch_size=batch_size,
         pin_memory=True,
-        num_workers=0,
+        shuffle=True,
+        num_workers=num_workers,
     )
-    return loader
+    def infinite_loop(l):
+        while True:
+            yield from l
+    return infinite_loop(loader)
 
 
 class Folder(data.Dataset):
@@ -58,15 +62,17 @@ class Protobuf():
         wdl = self.build_wdl(game, side_to_move)
         policy, legals = self.build_policy(game.policy[position_index])
         planes = self.build_input(game, position_index)
-        return planes, policy, legals, wdl
+        return planes, policy, wdl
 
     def build_wdl(self, game, side_to_move):
+        # returns the index of wdl
         if game.result == chunk_pb2.Game.Result.Value('DRAW'):
-           return [0, 1, 0]
+           return 1
         # only true when winner is white and playing as white, or winner is black and playing as black
         if (game.result == chunk_pb2.Game.Result.Value('WHITE')) != side_to_move:
-            return [1, 0, 0]
-        return [0, 0, 1]
+            return 0
+        # else, side to play lost
+        return 2
 
     def build_policy(self, policy):
         targets = torch.zeros(1858)
