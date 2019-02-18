@@ -39,22 +39,18 @@ class Session():
         print('Constructing data loaders...')
         batch_size = cfg['training']['batch_size']
 
-        threads = multiprocessing.cpu_count()
+        num_workers = multiprocessing.cpu_count()
         self.train_loader = data.data_loader(
             path=cfg['dataset']['train_path'],
             batch_size=batch_size,
+            num_workers=num_workers,
         )
         self.test_loader = data.data_loader(
             path=cfg['dataset']['test_path'],
             # use smaller batch size when doing gradient accumulation in training, doesn't affect test results
             batch_size=batch_size // cfg['training']['batch_splits'],
+            num_workers=num_workers,
         )
-        t0 = time.perf_counter()
-        print('Prefetching data...')
-        next(iter(self.train_loader))
-        t1 = time.perf_counter()
-        print('loading took', t1-t0)
-        next(iter(self.test_loader))
 
         # place to store and accumulate per-batch metrics
         # use self.metric[key] to access, since these are results of possibly multiple virtual batches
