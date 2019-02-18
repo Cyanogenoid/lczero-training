@@ -111,7 +111,7 @@ class Protobuf():
             planes = planes.flip(dims=[1])
         return planes
 
-    def build_position(self, planes, state, mirror=False):
+    def build_position(self, planes, state):
         indices = [
             state.white_pawns,
             state.white_knights,
