@@ -18,9 +18,11 @@ def data_loader(path, batch_size, num_workers=0):
         shuffle=True,
         num_workers=num_workers,
     )
+
     def infinite_loop(l):
         while True:
             yield from l
+
     return infinite_loop(loader)
 
 
@@ -67,7 +69,7 @@ class Protobuf():
     def build_wdl(self, game, side_to_move):
         # returns the index of wdl
         if game.result == chunk_pb2.Game.Result.Value('DRAW'):
-           return 1
+            return 1
         # only true when winner is white and playing as white, or winner is black and playing as black
         if (game.result == chunk_pb2.Game.Result.Value('WHITE')) != side_to_move:
             return 0
