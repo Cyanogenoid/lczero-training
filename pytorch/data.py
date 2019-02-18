@@ -202,26 +202,30 @@ class Protobuf():
             1,
         ]).unsqueeze(1)
 
-        return planes.view(planes.size(0), 8, 8)
+        planes = planes.view(planes.size(0), 8, 8)
+        if state.side_to_move:
+            # flip top-to-bottom when playing from black side
+            planes = planes.flip(dims=[1])
+        return planes
 
     def build_position(self, planes, state, mirror=False):
-        bitstrings = [
-            state.our_pawns,
-            state.our_knights,
-            state.our_bishops,
-            state.our_rooks,
-            state.our_queens,
-            state.our_king,
-            state.their_pawns,
-            state.their_knights,
-            state.their_bishops,
-            state.their_rooks,
-            state.their_queens,
-            state.their_king,
+        indices = [
+            state.white_pawns,
+            state.white_knights,
+            state.white_bishops,
+            state.white_rooks,
+            state.white_queens,
+            [state.white_king],
+            state.black_pawns,
+            state.black_knights,
+            state.black_bishops,
+            state.black_rooks,
+            state.black_queens,
+            [state.black_king],
         ]
         if state.repetitions:
-            bitstrings.append(0xFFFF_FFFF)
-        indices = torch.LongTensor(list(utils.grouped_bit_indices(bitstrings)))
+            indices.append(range(64))
+        indices = torch.LongTensor(list(utils.indices_to_plane_indices(indices)))
         planes.view(-1).scatter_(dim=0, index=indices, value=1)
 
 
@@ -230,7 +234,7 @@ if __name__ == '__main__':
     import time
     p = Protobuf(history=8)
     t0 = time.perf_counter()
-    for _ in range(2_000):
+    for _ in range(1_000):
         with gzip.open('game_000000.gz', 'rb') as fd:
         #with open('game_000000', 'rb') as fd:
             a = p(fd.read())
