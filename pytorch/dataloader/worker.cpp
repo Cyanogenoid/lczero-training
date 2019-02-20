@@ -38,11 +38,11 @@ std::tuple<torch::Tensor, torch::Tensor> build_policy(const flatlczero::Policy* 
 }
 
 void build_pieces(torch::Tensor& planes, const flatlczero::Pieces* pieces) {
-    auto p = planes.view(-1);
+    auto planes_a = planes.accessor<float, 2>();
     for (size_t i = 0; i < pieces->indices()->Length(); i++) {
         auto index = pieces->indices()->Get(i);
         auto type = pieces->types()->Get(i);
-        p[type * 64 + index] = 1;
+        planes_a[type][index] = 1;
     }
 }
 
@@ -81,7 +81,7 @@ torch::Tensor build_input(const flatlczero::Game* game, const int position_index
     planes[offset + 6].fill_(0);
     planes[offset + 7].fill_(1);
 
-    if (position->side_to_move()) {
+    if (position->side_to_move() == flatlczero::Side::Side_Black) {
         return planes.view({planes.size(0), 8, 8}).flip({1});
     } else {
         return planes.view({planes.size(0), 8, 8});
