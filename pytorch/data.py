@@ -2,11 +2,15 @@ import glob
 import gzip
 import random
 
+import numpy as np
 import torch
 import torch.utils.data as data
 
 import utils
-import proto.chunk_pb2 as chunk_pb2
+from flatlczero.Game import Game
+from flatlczero.Result import Result
+from flatlczero.Result import Result
+from flatlczero.PieceType import PieceType
 
 
 def data_loader(path, batch_size, num_workers=0):
@@ -50,40 +54,58 @@ class Folder(data.Dataset):
         return len(self.files)
 
 
-class Protobuf():
+class Flatbuffers():
     def __init__(self, history):
         self.history = history
+        self.piece_type_to_index = np.vectorize([
+            #PieceType.Pawn: 0 * 64,
+            #PieceType.Knight: 1 * 64,
+            #PieceType.Bishop: 2 * 64,
+            #PieceType.Rook: 3 * 64,
+            #PieceType.Queen: 4 * 64,
+            #PieceType.King: 5 * 64,
+            0 * 64,
+            1 * 64,
+            2 * 64,
+            3 * 64,
+            4 * 64,
+            5 * 64,
+        ].__getitem__)
 
+    #@profile
     def __call__(self, data):
-        chunk = chunk_pb2.Chunk.FromString(data)
-        game = chunk.game[0]  # assumes 1 game per chunk
+        game = Game.GetRootAsGame(data, 0)
         # select random position
-        position_index = random.randrange(len(game.state))
-        side_to_move = game.state[position_index].side_to_move  # 0 if white, 1 if black
+        position_index = random.randrange(game.StatesLength())
+        state = game.States(position_index)
 
-        wdl = self.build_wdl(game, side_to_move)
-        policy, legals = self.build_policy(game.policy[position_index])
+        wdl = self.build_wdl(game, state.Position().SideToMove())
+        policy, legals = self.build_policy(state.Policy())
         planes = self.build_input(game, position_index)
         return planes, policy, wdl
 
+    #@profile
     def build_wdl(self, game, side_to_move):
-        # returns the index of wdl
-        if game.result == chunk_pb2.Game.Result.Value('DRAW'):
+        winner = game.Winner()
+        if winner == Result.Draw:
             return 1
         # only true when winner is white and playing as white, or winner is black and playing as black
-        if (game.result == chunk_pb2.Game.Result.Value('WHITE')) != side_to_move:
+        if (winner == Result.White) != side_to_move:
             return 0
         # else, side to play lost
         return 2
 
+    #@profile
     def build_policy(self, policy):
         targets = torch.zeros(1858)
         legals = torch.zeros(1858)
-        index = torch.LongTensor(policy.index)
-        targets.scatter_(dim=0, index=index, src=torch.FloatTensor(policy.prior))
+        index = torch.from_numpy(policy.IndexAsNumpy().astype(np.int64))
+        probability = torch.from_numpy(policy.ProbabilityAsNumpy())
+        targets.scatter_(dim=0, index=index, src=probability)
         legals.scatter_(dim=0, index=index, value=1)
         return targets, legals
 
+    #@profile
     def build_input(self, game, position_index):
         planes_per_position = 13
         planes = torch.zeros(self.history * planes_per_position + 8, 64)
@@ -91,57 +113,55 @@ class Protobuf():
         for current_position in range(position_index, position_index - self.history, -1):
             if current_position < 0:
                 continue
-            state = game.state[current_position]
-            self.build_position(planes[index:index + planes_per_position], state)
+            position = game.States(current_position).Position()
+            self.build_position(planes[index:index + planes_per_position], position)
             index += planes_per_position
 
-        state = game.state[position_index]
+        position = game.States(position_index).Position()
         planes[index:index + 8] = torch.FloatTensor([
-            state.us_ooo,
-            state.us_oo,
-            state.them_ooo,
-            state.them_oo,
-            state.side_to_move,
-            state.rule_50,
+            position.UsOoo(),
+            position.UsOo(),
+            position.ThemOoo(),
+            position.ThemOo(),
+            position.SideToMove(),
+            position.Rule50(),
             0,  # Move count is no longer fed into the net
             1,
         ]).unsqueeze(1)
 
         planes = planes.view(planes.size(0), 8, 8)
-        if state.side_to_move:
+        if position.SideToMove():
             # flip top-to-bottom when playing from black side
             planes = planes.flip(dims=[1])
         return planes
 
-    def build_position(self, planes, state):
-        indices = [
-            state.white_pawns,
-            state.white_knights,
-            state.white_bishops,
-            state.white_rooks,
-            state.white_queens,
-            [state.white_king],
-            state.black_pawns,
-            state.black_knights,
-            state.black_bishops,
-            state.black_rooks,
-            state.black_queens,
-            [state.black_king],
-        ]
-        if state.repetitions:
-            indices.append(range(64))
-        indices = torch.LongTensor(list(utils.indices_to_plane_indices(indices)))
+    #@profile
+    def build_position(self, planes, position):
+        white = position.White()
+        black = position.Black()
+        self.build_pieces(planes[0:6], white)
+        self.build_pieces(planes[6:12], black)
+        if position.Repetitions():
+            planes[12].fill_(1)
+
+    #@profile
+    def build_pieces(self, planes, pieces):
+        indices = pieces.IndicesAsNumpy()
+        types = pieces.TypesAsNumpy()
+        type_indices = self.piece_type_to_index(types)
+        indices = type_indices + indices
+        indices = torch.from_numpy(indices.astype(np.int64))
         planes.view(-1).scatter_(dim=0, index=indices, value=1)
 
 
 if __name__ == '__main__':
     import time
-    p = Protobuf(history=8)
+    p = Flatbuffers(history=8)
     t0 = time.perf_counter()
     for _ in range(1_000):
-        with gzip.open('game_000000.gz', 'rb') as fd:
+        with gzip.open('game_000000.fbs.gz', 'rb') as fd:
         #with open('game_000000', 'rb') as fd:
-            a = p(fd.read())
+            a = p(bytearray(fd.read()))
     t1 = time.perf_counter()
     print(t1 - t0)
 
