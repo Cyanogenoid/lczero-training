@@ -80,7 +80,12 @@ torch::Tensor build_input(const flatlczero::Game* game, const int position_index
     planes[offset + 5].fill_(position->rule_50());
     planes[offset + 6].fill_(0);
     planes[offset + 7].fill_(1);
-    return planes.view({planes.size(0), 8, 8});
+
+    if (position->side_to_move()) {
+        return planes.view({planes.size(0), 8, 8}).flip({1});
+    } else {
+        return planes.view({planes.size(0), 8, 8});
+    }
 }
 
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, int> load(char* data) {
