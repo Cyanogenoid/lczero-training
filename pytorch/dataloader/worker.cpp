@@ -27,7 +27,7 @@ std::tuple<torch::Tensor, torch::Tensor> build_policy(const flatlczero::Policy* 
     auto targets = torch::zeros(1858);
     auto legals = torch::zeros(1858);
     auto targets_a = targets.accessor<float, 1>();
-    auto legals_a = targets.accessor<float, 1>();
+    auto legals_a = legals.accessor<float, 1>();
     for (size_t i = 0; i < policy->index()->Length(); i++) {
         auto index = policy->index()->Get(i);
         auto probability = policy->probability()->Get(i);
