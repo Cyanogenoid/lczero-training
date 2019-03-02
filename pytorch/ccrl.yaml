@@ -1,12 +1,12 @@
 %YAML 1.2
 ---
 
-name: '128x10-azpol'
+name: '128x10-lcd'
 
 dataset:
     # paths of training chunks to include
-    train_path: 'data/v3/train/*.gz'
-    test_path: 'data/v3/test/*.gz'
+    train_path: 'data/lcd/train/*-data/*.gz'
+    test_path: 'data/lcd/test/*-data/*.gz'
 
     # one of {'fixed', 'fixed_strict', 'every'}
     # 'fixed' samples a fixed number of unique positions per game, but allows for fewer if the game is too short
@@ -53,7 +53,7 @@ training:
     checkpoint_directory: 'checkpoints'
 
     swa_every: 10
-    swa_momentum: 0.99
+    swa_momentum: 0
 
 model:
     residual_channels: 128

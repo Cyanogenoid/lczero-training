@@ -7,10 +7,6 @@ import torch
 import torch.utils.data as data
 
 import utils
-from flatlczero.Game import Game
-from flatlczero.Result import Result
-from flatlczero.Result import Result
-from flatlczero.PieceType import PieceType
 import lczero_training_worker as worker
 
 

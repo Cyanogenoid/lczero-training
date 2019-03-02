@@ -149,7 +149,7 @@ class Session():
         ''' Perform one step of either training or evaluation
         '''
         # Move batch to the GPU
-        input_planes, policy_target, value_target = batch
+        input_planes, policy_target, policy_legals, value_target = batch
         input_planes = input_planes.cuda(non_blocking=True)
         policy_target = policy_target.cuda(non_blocking=True)
         value_target = value_target.cuda(non_blocking=True)
