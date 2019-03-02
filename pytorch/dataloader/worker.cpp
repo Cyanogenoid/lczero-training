@@ -1,11 +1,11 @@
 #include <torch/extension.h>
 
 #include "chunk_generated.h"
-#include "flatbuffers.h"
 
 #include <iostream>
 #include <fstream>
 #include <random>
+#include <tuple>
 
 
 int build_wdl(const flatlczero::Game* game, const flatlczero::Side side_to_move) {
@@ -34,7 +34,7 @@ std::tuple<torch::Tensor, torch::Tensor> build_policy(const flatlczero::Policy* 
         targets_a[index] = probability;
         legals_a[index] = 1;
     }
-    return {targets, legals};
+    return std::make_tuple(targets, legals);
 }
 
 void build_pieces(torch::Tensor& planes, const flatlczero::Pieces* pieces, bool flip) {
@@ -108,7 +108,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, int> load(char* data) {
     torch::Tensor policy, legals;
     std::tie(policy, legals) = build_policy(state->policy());
     int wdl = build_wdl(game, state->position()->side_to_move());
-    return {input, policy, legals, wdl};
+    return std::make_tuple(input, policy, legals, wdl);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
