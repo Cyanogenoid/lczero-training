@@ -10,9 +10,8 @@ setuptools.setup(
             'worker.cpp',
         ],
         include_dirs=[
-            '../../libs/flatbuffers/include/flatbuffers'
+            '../../libs/flatbuffers/include'
         ],
-        libraries=['protobuf-lite'],
     )],
     cmdclass={
         'build_ext': BuildExtension,
