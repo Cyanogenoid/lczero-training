@@ -50,18 +50,22 @@ void build_pieces(torch::Tensor& planes, const flatlczero::Pieces* pieces, bool 
     }
 }
 
-void build_position(torch::Tensor& planes, const flatlczero::Position* position) {
+void build_position(torch::Tensor& planes, const flatlczero::Position* position, bool side_is_white) {
     auto white = position->white();
     auto black = position->black();
     auto our_planes = planes.slice(0, 0, 6);
     auto their_planes = planes.slice(0, 6, 12);
-    if (position->side_to_move() == flatlczero::Side::Side_White) {
-        build_pieces(our_planes, white, false);
-        build_pieces(their_planes, black, false);
+    const flatlczero::Pieces* ours;
+    const flatlczero::Pieces* theirs;
+    if (side_is_white) {
+        ours = white;
+        theirs = black;
     } else {
-        build_pieces(our_planes, black, true);
-        build_pieces(their_planes, white, true);
+        ours = black;
+        theirs = white;
     }
+    build_pieces(our_planes, ours, !side_is_white);
+    build_pieces(their_planes, theirs, !side_is_white);
     if (position->repetitions() >= 1) {
         planes[12].fill_(1);
     }
@@ -71,22 +75,23 @@ torch::Tensor build_input(const flatlczero::Game* game, const int position_index
     const int planes_per_position = 13;
     const int history = 8;
     auto planes = torch::zeros({history * planes_per_position + 8, 64});
+    auto main_position = game->states()->Get(position_index)->position();
+    bool side_is_white = main_position->side_to_move() == flatlczero::Side::Side_White;
 
     for (int i = position_index, plane_index = 0;
          i > position_index - history && i >= 0;
          i--, plane_index += planes_per_position) {
         auto position_planes = planes.slice(0, plane_index, plane_index + planes_per_position);
         auto position = game->states()->Get(i)->position();
-        build_position(position_planes, position);
+        build_position(position_planes, position, side_is_white);
     }
     int offset = history * planes_per_position;
-    auto position = game->states()->Get(position_index)->position();
-    planes[offset + 0].fill_(position->us_ooo());
-    planes[offset + 1].fill_(position->us_oo());
-    planes[offset + 2].fill_(position->them_ooo());
-    planes[offset + 3].fill_(position->them_oo());
-    planes[offset + 4].fill_(position->side_to_move());
-    planes[offset + 5].fill_(position->rule_50());
+    planes[offset + 0].fill_(main_position->us_ooo());
+    planes[offset + 1].fill_(main_position->us_oo());
+    planes[offset + 2].fill_(main_position->them_ooo());
+    planes[offset + 3].fill_(main_position->them_oo());
+    planes[offset + 4].fill_(main_position->side_to_move());
+    planes[offset + 5].fill_(main_position->rule_50());
     planes[offset + 6].fill_(0);
     planes[offset + 7].fill_(1);
 
