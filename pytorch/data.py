@@ -57,7 +57,7 @@ if __name__ == '__main__':
     import lczero_training_worker as worker
     t0 = time.perf_counter()
     for _ in range(1_000):
-        with gzip.open('game_000000.fbs.gz', 'rb') as fd:
+        with gzip.open('data/lcd/test/1-data/game_0.gz', 'rb') as fd:
         #with open('game_000000.fbs', 'rb') as fd:
             a = worker.load(fd.read())
     t1 = time.perf_counter()
