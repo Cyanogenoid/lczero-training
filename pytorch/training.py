@@ -1,12 +1,14 @@
 import time
 import os
 import multiprocessing
+import collections
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
+import numpy as np
 
 import data
 import model

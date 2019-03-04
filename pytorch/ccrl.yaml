@@ -56,8 +56,8 @@ training:
     swa_momentum: 0
 
 model:
-    residual_channels: 256
-    residual_blocks: 20
+    residual_channels: 128
+    residual_blocks: 10
     policy_channels: 32
     se_ratio: 8
 

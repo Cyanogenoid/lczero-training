@@ -15,12 +15,12 @@ int build_wdl(const flatlczero::Game* game, const flatlczero::Side side_to_move)
     // loss: 2
     auto winner = game->winner();
     if (winner == flatlczero::Result::Result_Draw) {
-        return 1;
-    }
-    if ((winner == flatlczero::Result::Result_White) == (side_to_move == flatlczero::Side::Side_White)) {
         return 0;
     }
-    return 2;
+    if ((winner == flatlczero::Result::Result_White) == (side_to_move == flatlczero::Side::Side_White)) {
+        return 1;
+    }
+    return -1;
 }
 
 std::tuple<torch::Tensor, torch::Tensor> build_policy(const flatlczero::Policy* policy) {
@@ -98,7 +98,7 @@ torch::Tensor build_input(const flatlczero::Game* game, const int position_index
     return planes.view({planes.size(0), 8, 8});
 }
 
-std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, int> load(char* data) {
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, float> load(char* data) {
     auto game = flatlczero::GetGame(data);
 
     // select random position from the game
@@ -113,7 +113,7 @@ std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, int> load(char* data) {
     torch::Tensor policy, legals;
     std::tie(policy, legals) = build_policy(state->policy());
     int wdl = build_wdl(game, state->position()->side_to_move());
-    return std::make_tuple(input, policy, legals, wdl);
+    return std::make_tuple(input, policy, legals, (float)wdl);
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
