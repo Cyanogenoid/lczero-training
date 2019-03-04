@@ -20,7 +20,15 @@ class Net:
         self.pb.min_version.patch = LC0_PATCH
         self.pb.format.weights_encoding = pb.Format.LINEAR16
 
-        self.set_networkformat(classical=True)
+        self.weights = []
+
+        self.set_networkformat(net)
+        self.pb.format.network_format.input = input
+        self.set_policyformat(policy)
+        self.set_valueformat(value)
+
+    def set_networkformat(self, net):
+        self.pb.format.network_format.network = net
 
         self.weights = []
 
