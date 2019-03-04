@@ -204,6 +204,8 @@ def extract_weights(m):
 
 
 if __name__ == '__main__':
-    net = Net(256, 20, 80, 4)
+    net = Net(128, 10, 128, 8)
     batch = torch.rand(1, 112, 8, 8)
     policy, value = net(batch)
+    net.from_checkpoint('checkpoints/128x10-azpol/checkpoint-200000.pth')
+    net.export_proto('azpol.pb.gz')
