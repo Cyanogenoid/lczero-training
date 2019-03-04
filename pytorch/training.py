@@ -164,7 +164,7 @@ class Session():
         policy_logits = F.log_softmax(policy, dim=1)
         # this has the same gradient as cross-entropy
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
-        value_loss = F.mse_loss(value.squeeze(dim=1), value_target)
+        value_loss = F.mse_loss(value.squeeze(dim=1), value_target.float())
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \

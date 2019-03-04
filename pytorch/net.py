@@ -22,10 +22,7 @@ class Net:
 
         self.weights = []
 
-        self.set_networkformat(net)
-        self.pb.format.network_format.input = input
-        self.set_policyformat(policy)
-        self.set_valueformat(value)
+        self.set_networkformat(se=True)
 
     def set_networkformat(self, net):
         self.pb.format.network_format.network = net

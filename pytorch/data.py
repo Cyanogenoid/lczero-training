@@ -13,7 +13,7 @@ import lczero_training_worker as worker
 def data_loader(path, batch_size, num_workers=0):
     def transform(x):
         inp, pol, leg, result = worker.load(x)
-        return inp, pol, leg, torch.FloatTensor([result])
+        return inp, pol, leg, result
     dataset = Folder(path, transform=transform)
     loader = data.DataLoader(
         dataset,
