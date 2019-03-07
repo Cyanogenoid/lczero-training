@@ -90,9 +90,12 @@ class ValueHead(nn.Sequential):
         ]))
 
 
-class ResidualBlock(nn.Sequential):
+class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
-        super().__init__(OrderedDict([
+        super().__init__()
+        # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
+        # in the residual block even when not passed into the constructor
+        self.layers = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn1', nn.BatchNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
@@ -179,6 +182,9 @@ def extract_weights(m):
     elif isinstance(m, SqueezeExcitation):
         yield from extract_weights(m.lin1)
         yield from extract_weights(m.lin2)
+
+    elif isinstance(m, ResidualBlock):
+        yield from m.layers
 
     elif isinstance(m, nn.Sequential):
         for layer in m:
