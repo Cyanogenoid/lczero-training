@@ -134,7 +134,7 @@ class ResidualBlock(nn.Module):
     def forward(self, x):
         x_in = x
 
-        x = super().forward(x)
+        x = self.layers(x)
 
         x = x + x_in
         x = self.relu2(x)
