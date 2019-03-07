@@ -71,8 +71,8 @@ class Net(nn.Module):
         proto.parse_proto(path)
         weights = proto.get_weights()
         for model_weight, loaded_weight in zip(extract_weights(self), weights):
-            model_weight[:] = torch.from_numpy(loaded_weight).view_as(model_weight)
-        self.conv_block.layers[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
+            model_weight.data = torch.from_numpy(loaded_weight).view_as(model_weight)
+        self.conv_block[0].weight.data[:, 109, :, :] *= 99  # scale rule50 weights due to legacy reasons
 
     def export_onnx(self, path):
         dummy_input = torch.randn(10, 112, 8, 8)
@@ -212,7 +212,7 @@ def extract_weights(m):
         yield from extract_weights(m.conv)
 
     elif isinstance(m, ResidualBlock):
-        yield from m.layers
+        yield from extract_weights(m.layers)
 
     elif isinstance(m, nn.Sequential):
         for layer in m:
