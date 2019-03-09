@@ -133,7 +133,7 @@ class Session():
             total_loss, loss_components = self.forward(batch)
             total_loss.backward(retain_graph=retain_grad_buffers)
         else:
-            splits = [torch.FloatTensor.chunk(x, self.cfg['training']['batch_splits']) for x in batch]
+            splits = [x.chunk(self.cfg['training']['batch_splits']) for x in batch]
             for split in zip(*splits):
                 split_loss, loss_components = self.forward(split)
                 (split_loss / len(splits)).backward(retain_graph=retain_grad_buffers)
