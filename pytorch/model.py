@@ -7,6 +7,7 @@ import torch.nn.init as init
 import lc0_az_policy_map
 import net as proto_net
 import proto.net_pb2 as pb
+from context_block import ContextBlock2d
 
 
 class Net(nn.Module):
@@ -127,7 +128,7 @@ class ResidualBlock(nn.Module):
             ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(channels)),
 
-            ('se', SqueezeExcitation(channels, se_ratio)),
+            ('gc', ContextBlock2d(channels, channels // se_ratio, 'att', ['channel_add'])),
         ]))
         self.relu2 = nn.ReLU(inplace=True)
 
