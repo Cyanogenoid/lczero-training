@@ -128,7 +128,7 @@ class ResidualBlock(nn.Module):
             ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(channels)),
 
-            ('gc', ContextBlock2d(channels, channels // se_ratio, 'att', ['channel_add'])),
+            ('gc', ContextBlock2d(channels, channels // se_ratio, 'att', ['channel_add', 'channel_mul'])),
         ]))
         self.relu2 = nn.ReLU(inplace=True)
 
