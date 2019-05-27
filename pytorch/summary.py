@@ -9,7 +9,8 @@ import utils
 
 def model_graph(session):
     dummy_input = torch.zeros(1, 112, 8, 8).cuda()
-    session.train_writer.add_graph(session.net.module, dummy_input)
+    # TODO temporarily disabled as it seems to be broken on PyTorch 1.1.0
+    #session.train_writer.add_graph(session.net.module, dummy_input)
 
 
 def weight_histograms(session):
