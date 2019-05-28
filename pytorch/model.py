@@ -7,6 +7,7 @@ import torch.nn.init as init
 import lc0_az_policy_map
 import net as proto_net
 import proto.net_pb2 as pb
+import cgnl
 
 
 class Net(nn.Module):
@@ -17,6 +18,8 @@ class Net(nn.Module):
         self.conv_block = ConvBlock(112, channels, 3, padding=1)
 
         blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        # insert CGNL block
+        blocks.insert(16, ('cgnl', cgnl.SpatialCGNL(channels, channels//2, use_scale=False, groups=8)))
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
