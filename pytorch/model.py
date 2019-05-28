@@ -7,6 +7,7 @@ import torch.nn.init as init
 import lc0_az_policy_map
 import net as proto_net
 import proto.net_pb2 as pb
+import dcn
 
 
 class Net(nn.Module):
@@ -16,7 +17,8 @@ class Net(nn.Module):
 
         self.conv_block = ConvBlock(112, channels, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        use_dcn = lambda i: i >= 0.75 * residual_blocks
+        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio, use_dcn=use_dcn(i))) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
@@ -115,26 +117,52 @@ class ValueHead(nn.Sequential):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, se_ratio):
+    def __init__(self, channels, se_ratio, use_dcn=False):
         super().__init__()
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
-        self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn1', nn.BatchNorm2d(channels)),
-            ('relu', nn.ReLU(inplace=True)),
+        conv_op = dcn.DeformConv
+        deformable_groups = 1
+        offset_channels = 18
 
-            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn2', nn.BatchNorm2d(channels)),
+        self.use_dcn = use_dcn
 
-            ('se', SqueezeExcitation(channels, se_ratio)),
-        ]))
+        if self.use_dcn:
+            self.conv1_offset = nn.Conv2d(channels, deformable_groups * offset_channels, 3, padding=1)
+            self.conv1 = conv_op(channels, channels, 3, padding=1, deformable_groups=deformable_groups, bias=False)
+        else:
+            self.conv1 = nn.Conv2d(channels, channels, 3, padding=1, bias=False)
+
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.relu1 = nn.ReLU(inplace=True)
+
+        if self.use_dcn:
+            self.conv2_offset = nn.Conv2d(channels, deformable_groups * offset_channels, 3, padding=1)
+            self.conv2 = conv_op(channels, channels, 3, padding=1, deformable_groups=deformable_groups, bias=False)
+        else:
+            self.conv2 = nn.Conv2d(channels, channels, 3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+        self.se = SqueezeExcitation(channels, se_ratio)
         self.relu2 = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x_in = x
 
-        x = self.layers(x)
+        if self.use_dcn:
+            offset = self.conv1_offset(x)
+            x = self.conv1(x, offset)
+        else:
+            x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu1(x)
+        if self.use_dcn:
+            offset = self.conv2_offset(x)
+            x = self.conv2(x, offset)
+        else:
+            x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.se(x)
 
         x = x + x_in
         x = self.relu2(x)
