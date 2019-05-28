@@ -19,7 +19,7 @@ class Net(nn.Module):
 
         blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
         # insert CGNL block
-        blocks.insert(16, ('cgnl', cgnl.SpatialCGNL(channels, channels//2, use_scale=False, groups=8)))
+        blocks.insert(16, ('cgnl', cgnl.SpatialNL(channels, channels//2, use_scale=True)))
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
