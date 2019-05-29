@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-azpol'
+name: '128x10-instance-norm'
 
 dataset:
     # paths of training chunks to include

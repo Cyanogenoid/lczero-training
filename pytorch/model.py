@@ -30,9 +30,6 @@ class Net(nn.Module):
                 init.xavier_normal_(module.weight)
                 if module.bias is not None:
                     init.zeros_(module.bias)
-            if isinstance(module, nn.BatchNorm2d):
-                init.ones_(module.weight)
-                init.zeros_(module.bias)
 
     def forward(self, x):
         x = self.conv_block(x)
@@ -121,11 +118,11 @@ class ResidualBlock(nn.Module):
         # in the residual block even when not passed into the constructor
         self.layers = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn1', nn.BatchNorm2d(channels)),
+            ('bn1', nn.InstanceNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
 
             ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn2', nn.BatchNorm2d(channels)),
+            ('bn2', nn.InstanceNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
@@ -145,7 +142,7 @@ class ConvBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, padding=0):
         super().__init__(OrderedDict([
             ('conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
-            ('bn', nn.BatchNorm2d(out_channels)),
+            ('bn', nn.InstanceNorm2d(out_channels)),
             ('relu', nn.ReLU(inplace=True)),
         ]))
 
