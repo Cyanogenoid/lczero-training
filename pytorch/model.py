@@ -14,10 +14,20 @@ class Net(nn.Module):
         super().__init__()
         channels = residual_channels
 
-        self.conv_block = ConvBlock(112, channels, 3, padding=1)
+        self.conv_block = ConvBlock(112, channels // 4, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
-        self.residual_stack = nn.Sequential(OrderedDict(blocks))
+        self.residual_stack = nn.Sequential(
+            ResidualBlock(channels // 4, se_ratio),
+            ResidualBlock(channels // 4, se_ratio),
+            ResidualBlock(channels // 4, se_ratio),
+            ResidualBlock(channels // 2, se_ratio, expand_from=channels // 4),
+            ResidualBlock(channels // 2, se_ratio),
+            ResidualBlock(channels // 2, se_ratio),
+            ResidualBlock(channels // 2, se_ratio),
+            ResidualBlock(channels, se_ratio, expand_from=channels // 2),
+            ResidualBlock(channels, se_ratio),
+            ResidualBlock(channels, se_ratio),
+        )
 
         self.policy_head = PolicyHead(channels, policy_channels)
         self.value_head = ValueHead(channels, 32, 128)
@@ -115,12 +125,17 @@ class ValueHead(nn.Sequential):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, se_ratio):
+    def __init__(self, channels, se_ratio, expand_from=None):
         super().__init__()
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
+        if expand_from is None:
+            self.expansion = None
+            expand_from = channels
+        else:
+            self.expansion = nn.Conv2d(expand_from, channels, 1)
         self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
+            ('conv1', nn.Conv2d(expand_from, channels, 3, padding=1, bias=False)),
             ('bn1', nn.BatchNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
 
@@ -135,6 +150,8 @@ class ResidualBlock(nn.Module):
         x_in = x
 
         x = self.layers(x)
+        if self.expansion is not None:
+            x_in = self.expansion(x_in)
 
         x = x + x_in
         x = self.relu2(x)

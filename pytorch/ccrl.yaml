@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-azpol'
+name: '128x10-expand'
 
 dataset:
     # paths of training chunks to include
@@ -56,7 +56,7 @@ training:
     swa_momentum: 0.99
 
 model:
-    residual_channels: 128
+    residual_channels: 256
     residual_blocks: 10
     policy_channels: 128
     se_ratio: 8
