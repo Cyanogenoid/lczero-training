@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import torch.nn.functional as F
 
 import lc0_az_policy_map
 import net as proto_net
@@ -16,7 +17,7 @@ class Net(nn.Module):
 
         self.conv_block = ConvBlock(112, channels, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio), stride=(i == residual_blocks - 1)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
@@ -36,6 +37,7 @@ class Net(nn.Module):
 
     def forward(self, x):
         x = self.conv_block(x)
+        x = F.interpolate(x, size=(16, 16))
         x = self.residual_stack(x)
 
         policy = self.policy_head(x)
@@ -115,7 +117,7 @@ class ValueHead(nn.Sequential):
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, channels, se_ratio):
+    def __init__(self, channels, se_ratio, stride=1):
         super().__init__()
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
@@ -124,17 +126,23 @@ class ResidualBlock(nn.Module):
             ('bn1', nn.BatchNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
+            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False, stride=stride)),
             ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
+        if stride > 1:
+            self.skip = nn.Conv2d(channels, channels, 1, stride=stride)
+        else:
+            self.skip = None
         self.relu2 = nn.ReLU(inplace=True)
 
     def forward(self, x):
         x_in = x
 
         x = self.layers(x)
+        if self.skip is not None:
+            x_in = self.skip(x_in)
 
         x = x + x_in
         x = self.relu2(x)
