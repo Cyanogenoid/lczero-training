@@ -16,7 +16,7 @@ class Net(nn.Module):
 
         self.conv_block = ConvBlock(112, channels, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        blocks = [(f'block{i+1}', InceptionResNetC(channels, se_ratio)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
@@ -114,6 +114,34 @@ class ValueHead(nn.Sequential):
         ]))
 
 
+class InceptionResNetC(nn.Module):
+    def __init__(self, channels, se_ratio):
+        super().__init__()
+        self.path1 = nn.Sequential(
+            ConvBlock(channels, channels, 1),
+            ConvBlock(channels, channels, (1, 3), padding=(0, 1)),
+            ConvBlock(channels, channels, (3, 1), padding=(1, 0)),
+        )
+        self.path2_1 = ConvBlock(channels, channels, 1)
+        self.path2_2 = ConvBlock(2*channels, channels, 1)
+        self.se = SqueezeExcitation(channels, se_ratio)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x_in = x
+
+        x1 = self.path1(x)
+        x2 = self.path2_1(x)
+        x2 = torch.cat([x1, x2], dim=1)
+        x = self.path2_2(x2)
+
+        x = self.se(x)
+
+        x = x + x_in
+        x = self.relu(x)
+        return x
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
         super().__init__()
@@ -142,11 +170,11 @@ class ResidualBlock(nn.Module):
 
 
 class ConvBlock(nn.Sequential):
-    def __init__(self, in_channels, out_channels, kernel_size, padding=0):
+    def __init__(self, in_channels, out_channels, kernel_size, padding=0, linear=False):
         super().__init__(OrderedDict([
             ('conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
             ('bn', nn.BatchNorm2d(out_channels)),
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', nn.ReLU(inplace=True)) if not linear else ('identity', nn.Identity()),
         ]))
 
 
