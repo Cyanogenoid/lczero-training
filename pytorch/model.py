@@ -119,12 +119,13 @@ class ResidualBlock(nn.Module):
         super().__init__()
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
+        inner_channels = 4 * channels
         self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn1', nn.BatchNorm2d(channels)),
+            ('conv1', nn.Conv2d(channels, inner_channels, 3, padding=1, bias=False)),
+            ('bn1', nn.BatchNorm2d(inner_channels)),
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
+            ('conv2', nn.Conv2d(inner_channels, channels, 3, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
