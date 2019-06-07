@@ -128,6 +128,7 @@ class ResidualBlock(nn.Module):
             ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
+            ('ss', SelfScale(channels)),
         ]))
         self.relu2 = nn.ReLU(inplace=True)
 
@@ -139,6 +140,16 @@ class ResidualBlock(nn.Module):
         x = x + x_in
         x = self.relu2(x)
         return x
+
+
+class SelfScale(nn.Module):
+    def __init__(self, channels):
+        super().__init__()
+        self.conv = nn.Conv2d(channels, channels, 1)
+
+    def forward(self, x):
+        scale = self.conv(x)
+        return scale.sigmoid() * x
 
 
 class ConvBlock(nn.Sequential):
