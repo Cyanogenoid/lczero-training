@@ -124,10 +124,10 @@ class ResidualBlock(nn.Module):
             ('bn1', nn.BatchNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn2', nn.BatchNorm2d(channels)),
+            ('conv2', nn.Conv2d(channels, channels * 2, 3, padding=1, bias=False)),
+            ('bn2', nn.BatchNorm2d(channels * 2)),
 
-            ('se', SqueezeExcitation(channels, se_ratio)),
+            ('se', SqueezeExcitation(channels * 2, se_ratio)),
         ]))
         self.relu2 = nn.ReLU(inplace=True)
 
@@ -135,8 +135,9 @@ class ResidualBlock(nn.Module):
         x_in = x
 
         x = self.layers(x)
+        a, b = x.chunk(2, dim=1)
 
-        x = x + x_in
+        x = a + x_in * b.sigmoid()
         x = self.relu2(x)
         return x
 
