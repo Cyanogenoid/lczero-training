@@ -124,7 +124,7 @@ class ResidualBlock(nn.Module):
             ('bn1', nn.BatchNorm2d(channels)),
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
+            ('conv2', SplitConv2d(channels, channels, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(2 * channels)),
             ('ss', SelfScale2()),
 
@@ -148,7 +148,21 @@ class SelfScale2(nn.Module):
 
     def forward(self, x):
         a, b = x.chunk(2, dim=1)
-        return a.sigmoid() * b
+        return a * b.sigmoid()
+
+
+class SplitConv2d(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        kwargs.pop('kernel_size', None)
+        kwargs.pop('padding', None)
+        self.conv3x3 = nn.Conv2d(*args, kernel_size=3, padding=1, **kwargs)
+        self.conv1x1 = nn.Conv2d(*args, kernel_size=1, padding=0, **kwargs)
+
+    def forward(self, x):
+        a = self.conv3x3(x)
+        b = self.conv1x1(x)
+        return torch.cat([a, b], dim=1)
 
 
 class ConvBlock(nn.Sequential):
