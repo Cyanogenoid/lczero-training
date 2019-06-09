@@ -53,7 +53,7 @@ training:
     checkpoint_directory: 'checkpoints'
 
     swa_every: 10
-    swa_momentum: 0.99
+    swa_momentum: 0
 
 model:
     residual_channels: 128
