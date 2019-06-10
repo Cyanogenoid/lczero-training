@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-selfscale2-double'
+name: '128x10-gse-block'
 
 dataset:
     # paths of training chunks to include
@@ -57,7 +57,7 @@ training:
 
 model:
     residual_channels: 128
-    residual_blocks: 10
+    residual_blocks: 20
     policy_channels: 128
     se_ratio: 8
 
