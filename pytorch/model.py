@@ -124,6 +124,8 @@ class ResidualBlock(nn.Module):
             ('bn1', nn.BatchNorm2d(2 * channels)),
             ('ss1', SelfScale2()),
 
+            ('se', SqueezeExcitation(channels, se_ratio)),
+
             ('relu', nn.ReLU(inplace=True)),
 
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
