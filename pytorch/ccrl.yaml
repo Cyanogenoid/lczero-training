@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-selfscale2-early'
+name: '128x10-selfscale2-double'
 
 dataset:
     # paths of training chunks to include
