@@ -120,13 +120,13 @@ class ResidualBlock(nn.Module):
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
         self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
+            ('conv1', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=True)),
             ('ss1', SelfScale2()),
             ('bn1', nn.BatchNorm2d(channels)),
 
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
+            ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=True)),
             ('ss2', SelfScale2()),
             ('bn2', nn.BatchNorm2d(channels)),
 
@@ -156,7 +156,7 @@ class SelfScale2(nn.Module):
 class ConvBlock(nn.Sequential):
     def __init__(self, in_channels, out_channels, kernel_size, padding=0):
         super().__init__(OrderedDict([
-            ('conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
+            'conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
             ('bn', nn.BatchNorm2d(out_channels)),
             ('relu', nn.ReLU(inplace=True)),
         ]))
