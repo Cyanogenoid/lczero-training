@@ -120,14 +120,14 @@ class ResidualBlock(nn.Module):
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
         self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
-            ('ss1', SelfScale2()),
+            ('conv1', nn.Conv2d(channels, int(1.25 * channels), 3, padding=1, bias=False)),
+            ('ss1', SelfScale2(channels)),
             ('bn1', nn.BatchNorm2d(channels)),
 
             ('relu', nn.ReLU(inplace=True)),
 
-            ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
-            ('ss2', SelfScale2()),
+            ('conv2', nn.Conv2d(channels, int(1.25 * channels), 3, padding=1, bias=False)),
+            ('ss2', SelfScale2(channels)),
             ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
@@ -145,12 +145,17 @@ class ResidualBlock(nn.Module):
 
 
 class SelfScale2(nn.Module):
-    def __init__(self):
+    def __init__(self, main_channels):
         super().__init__()
+        self.channels = main_channels
 
     def forward(self, x):
-        a, b = x.chunk(2, dim=1)
-        return a.sigmoid() * b
+        a = x[:, :self.channels]
+        b = x[:, self.channels:]
+        assert a.size(1) % b.size(1) == 0
+        expansion = a.size(1) // b.size(1)
+        b = b.repeat(1, expansion, 1, 1)
+        return a * b.sigmoid()
 
 
 class ConvBlock(nn.Sequential):
