@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-selfscale2-double-prebn'
+name: '128x10-selfscale2-double-prebn-nose'
 
 dataset:
     # paths of training chunks to include

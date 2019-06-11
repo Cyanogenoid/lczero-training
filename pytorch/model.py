@@ -129,8 +129,6 @@ class ResidualBlock(nn.Module):
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss2', SelfScale2()),
             ('bn2', nn.BatchNorm2d(channels)),
-
-            ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
         self.relu2 = nn.ReLU(inplace=True)
 
