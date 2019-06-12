@@ -114,6 +114,14 @@ class ValueHead(nn.Sequential):
         ]))
 
 
+class Swish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.sigmoid() * x
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
         super().__init__()
@@ -124,7 +132,7 @@ class ResidualBlock(nn.Module):
             ('ss1', SelfScale2()),
             ('bn1', nn.BatchNorm2d(channels)),
 
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', Swish()),
 
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss2', SelfScale2()),
@@ -168,7 +176,7 @@ class SqueezeExcitation(nn.Module):
 
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.lin1 = nn.Linear(channels, channels // ratio)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = Swish()
         self.lin2 = nn.Linear(channels // ratio, 2 * channels)
 
     def forward(self, x):
