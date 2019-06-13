@@ -150,12 +150,17 @@ class SelfScale2(nn.Module):
         self.channels = main_channels
 
     def forward(self, x):
+        original_size = x.size()
+
         a = x[:, :self.channels]
         b = x[:, self.channels:]
         assert a.size(1) % b.size(1) == 0
         expansion = a.size(1) // b.size(1)
-        b = b.repeat(1, expansion, 1, 1)
-        return a * b.sigmoid()
+        a = a.view(a.size(0), expansion, -1, a.size(2), a.size(3))
+        b = b.unsqueeze(1)
+        x = a * b.sigmoid()
+
+        return x.view(x.size(0), self.channels, 8, 8)
 
 
 class ConvBlock(nn.Sequential):
