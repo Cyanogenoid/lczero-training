@@ -150,7 +150,7 @@ class SelfScale2(nn.Module):
 
     def forward(self, x):
         a, b = x.chunk(2, dim=1)
-        return a.sigmoid() * b
+        return a.sigmoid() * (a + b)
 
 
 class ConvBlock(nn.Sequential):
