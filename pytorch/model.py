@@ -158,7 +158,7 @@ class SelfScale2(nn.Module):
         expansion = a.size(1) // b.size(1)
         a = a.view(a.size(0), expansion, -1, a.size(2), a.size(3))
         b = b.unsqueeze(1)
-        x = a * b.sigmoid()
+        x = a.sigmoid() * b
 
         return x.view(x.size(0), self.channels, 8, 8)
 
