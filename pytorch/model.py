@@ -124,7 +124,7 @@ class ResidualBlock(nn.Module):
             ('ss1', SelfScale2()),
             ('bn1', nn.BatchNorm2d(channels)),
 
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', nn.ELU()),
 
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss2', SelfScale2()),
@@ -132,7 +132,7 @@ class ResidualBlock(nn.Module):
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
-        self.relu2 = nn.ReLU(inplace=True)
+        self.relu2 = nn.ELU()
 
     def forward(self, x):
         x_in = x
