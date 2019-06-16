@@ -122,8 +122,6 @@ class ResidualBlock(nn.Module):
         self.layers = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss1', SelfScale2()),
-            ('bn1', nn.BatchNorm2d(channels)),
-
             ('relu', nn.ELU()),
 
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
