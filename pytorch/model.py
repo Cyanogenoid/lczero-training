@@ -120,19 +120,19 @@ class ResidualBlock(nn.Module):
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
         self.layers = nn.Sequential(OrderedDict([
+            ('bn1', nn.BatchNorm2d(channels)),
+            ('elu1', nn.ELU(inplace=True)),
             ('conv1', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss1', SelfScale2()),
-            ('bn1', nn.BatchNorm2d(channels)),
 
-            ('relu', nn.ELU(inplace=True)),
 
+            ('bn2', nn.BatchNorm2d(channels)),
+            ('elu2', nn.ELU(inplace=True)),
             ('conv2', nn.Conv2d(channels, 2 * channels, 3, padding=1, bias=False)),
             ('ss2', SelfScale2()),
-            ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
-        self.relu2 = nn.ELU(inplace=True)
 
     def forward(self, x):
         x_in = x
@@ -140,7 +140,6 @@ class ResidualBlock(nn.Module):
         x = self.layers(x)
 
         x = x + x_in
-        x = self.relu2(x)
         return x
 
 
