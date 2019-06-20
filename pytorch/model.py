@@ -109,7 +109,7 @@ class ValueHead(nn.Sequential):
             ('conv_block', ConvBlock(in_channels, value_channels, 1)),
             ('flatten', Flatten()),
             ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
-            ('relu1', nn.ReLU(inplace=True)),
+            ('relu1', nn.ELU(inplace=True)),
             ('lin2', nn.Linear(lin_channels, 3)),
         ]))
 
@@ -122,14 +122,14 @@ class ResidualBlock(nn.Module):
         self.layers = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn1', nn.BatchNorm2d(channels)),
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', nn.ELU(inplace=True)),
 
             ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(channels)),
 
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
-        self.relu2 = nn.ReLU(inplace=True)
+        self.relu2 = nn.ELU(inplace=True)
 
     def forward(self, x):
         x_in = x
@@ -146,7 +146,7 @@ class ConvBlock(nn.Sequential):
         super().__init__(OrderedDict([
             ('conv', nn.Conv2d(in_channels, out_channels, kernel_size, padding=padding, bias=False)),
             ('bn', nn.BatchNorm2d(out_channels)),
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', nn.ELU(inplace=True)),
         ]))
 
 
@@ -156,7 +156,7 @@ class SqueezeExcitation(nn.Module):
 
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.lin1 = nn.Linear(channels, channels // ratio)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ELU(inplace=True)
         self.lin2 = nn.Linear(channels // ratio, 2 * channels)
 
     def forward(self, x):
