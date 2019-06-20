@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-azpol'
+name: '256x20-swish'
 
 dataset:
     # paths of training chunks to include
@@ -22,7 +22,7 @@ dataset:
 training:
     total_steps: 200_000
     batch_size: 1024
-    batch_splits: 1
+    batch_splits: 4
 
     lr:
         # warmup
@@ -56,8 +56,8 @@ training:
     swa_momentum: 0
 
 model:
-    residual_channels: 128
-    residual_blocks: 10
+    residual_channels: 256
+    residual_blocks: 20
     policy_channels: 128
     se_ratio: 8
 

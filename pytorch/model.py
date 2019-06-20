@@ -122,7 +122,7 @@ class ResidualBlock(nn.Module):
         self.layers = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn1', nn.BatchNorm2d(channels)),
-            ('relu', nn.ReLU(inplace=True)),
+            ('relu', Swish()),
 
             ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
             ('bn2', nn.BatchNorm2d(channels)),
@@ -156,7 +156,7 @@ class SqueezeExcitation(nn.Module):
 
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.lin1 = nn.Linear(channels, channels // ratio)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = Swish()
         self.lin2 = nn.Linear(channels // ratio, 2 * channels)
 
     def forward(self, x):
@@ -181,6 +181,14 @@ class Flatten(nn.Module):
 
     def forward(self, x):
         return x.view(x.size(0), -1)
+
+
+class Swish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.sigmoid() * x
 
 
 '''
