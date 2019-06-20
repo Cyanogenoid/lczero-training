@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '160-selfscale2-double-prebn-elu-everywhere'
+name: '176x20-selfscale2-double-prebn-elu-everywhere-grouped'
 
 dataset:
     # paths of training chunks to include
@@ -56,7 +56,7 @@ training:
     swa_momentum: 0
 
 model:
-    residual_channels: 160
+    residual_channels: 176
     residual_blocks: 20
     policy_channels: 128
     se_ratio: 8
