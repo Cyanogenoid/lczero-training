@@ -175,6 +175,36 @@ class SqueezeExcitation(nn.Module):
         return x
 
 
+class LinearContextTransform(nn.Module):
+    def __init__(self, channels, groups):
+        super().__init__()
+        self.pool = nn.AdaptiveAvgPool2d(1)
+        self.groups = groups
+        self.epsilon = 1e-5
+        self.w = nn.Parameter(torch.zeros(channels))
+        self.b = nn.Parameter(torch.ones(channels))
+
+    def forward(self, x):
+        n, c, h, w = x.size()
+        x_in = x
+
+        x = self.pool(x).view(n, c)
+        # split into groups
+        x = x.view(n, self.groups, -1)
+        # groupwise mean and stdev
+        mu = x.sum(2, keepdim=True)
+        sigma = (x.var(2, keepdim=True) + self.epsilon).sqrt()
+        # apply normalisation
+        x = (x - mu) / sigma
+        # linear transform
+        x = x.view(n, c)
+        x = w * x + b
+
+        x = x.view(n, c, 1, 1)
+        x = x.sigmoid() * x_in
+        return x
+
+
 class Flatten(nn.Module):
     def __init__(self):
         super().__init__()

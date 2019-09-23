@@ -1,7 +1,7 @@
 %YAML 1.2
 ---
 
-name: '128x10-azpol'
+name: '128x10-lct'
 
 dataset:
     # paths of training chunks to include
@@ -60,6 +60,7 @@ model:
     residual_blocks: 10
     policy_channels: 128
     se_ratio: 8
+    lct_groups: 4
 
 logging:
     directory: 'runs'
