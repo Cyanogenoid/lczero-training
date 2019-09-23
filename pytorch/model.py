@@ -181,8 +181,8 @@ class LinearContextTransform(nn.Module):
         self.pool = nn.AdaptiveAvgPool2d(1)
         self.groups = groups
         self.epsilon = 1e-5
-        self.w = nn.Parameter(torch.zeros(channels))
-        self.b = nn.Parameter(torch.ones(channels))
+        self.w = nn.Parameter(torch.zeros(2, channels))
+        self.b = nn.Parameter(torch.ones(2, channels))
 
     def forward(self, x):
         n, c, h, w = x.size()
@@ -197,11 +197,12 @@ class LinearContextTransform(nn.Module):
         # apply normalisation
         x = (x - mu) / sigma
         # linear transform
-        x = x.view(n, c)
+        x = x.view(n, 1, c)
         x = w * x + b
 
         x = x.view(n, c, 1, 1)
-        x = x.sigmoid() * x_in
+        scale, shift = x[:, 0], x[:, 1]
+        x = scale.sigmoid() * x_in + shift
         return x
 
 
