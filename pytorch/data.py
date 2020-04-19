@@ -10,7 +10,8 @@ import numpy as np
 import dataloader
 
 
-V3_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
+V4_STRUCT = struct.Struct('4s7432s832sBBBBBBBb')
+V4_STRUCT = struct.Struct('4s7432s832sBBBBBBBbffff')
 
 
 def v3_loader(path, batch_size, sample_method, sample_argument, shufflebuffer_size, num_workers=None):
@@ -28,7 +29,7 @@ def v3_loader(path, batch_size, sample_method, sample_argument, shufflebuffer_si
 
 class Positions(data.Dataset):
     def __init__(self, path, sample_method, sample_argument, shufflebuffer_size, num_workers=None):
-        position_sampler = RandomPosition(**{sample_method: sample_argument}, record_size=V3_STRUCT.size)
+        position_sampler = RandomPosition(**{sample_method: sample_argument}, record_size=V4_STRUCT.size)
         # load chunks from folder
         dataset = Folder(path, transform=position_sampler)
         # infinite generator of positions
@@ -37,10 +38,10 @@ class Positions(data.Dataset):
         loader = dataloader.ShufflingDataLoader(
             lambda: position_loader,
             shuffle_size=shufflebuffer_size,
-            struct_size=V3_STRUCT.size,
+            struct_size=V4_STRUCT.size,
         )
         # parse v3 records into PyTorch tensors
-        loader = map(parse_v3, loader)
+        loader = map(parse_v4, loader)
         # only include correctly parsed v3 records
         loader = filter(lambda x: x is not None, loader)
         self.loader = loader
@@ -52,9 +53,9 @@ class Positions(data.Dataset):
         return 2**30
 
 
-def parse_v3(position):
+def parse_v4(position):
     try:
-        ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner = V3_STRUCT.unpack(position)
+        ver, probs, planes, us_ooo, us_oo, them_ooo, them_oo, stm, rule50_count, move_count, winner, root_q, best_q, root_d, best_d = V4_STRUCT.unpack(position)
     except struct.error:
         return None
     move_count = 0
@@ -68,9 +69,13 @@ def parse_v3(position):
     planes = torch.cat([planes, flat_planes], dim=0)
 
     probs = torch.from_numpy(np.frombuffer(probs, dtype=np.float32))
-    wdl = [1, 0, -1].index(winner)
+    z_wdl = [1, 0, -1].index(winner)
 
-    return planes, probs, wdl
+    best_q_w = 0.5 * (1 - best_d + best_q)
+    best_q_l = 0.5 * (1 - best_d - best_q)
+    q_wdl = torch.FloatTensor([best_q_w, best_d, best_q_l])
+
+    return planes, probs, z_wdl, q_wdl
 
 
 def loop_positions(dataset):

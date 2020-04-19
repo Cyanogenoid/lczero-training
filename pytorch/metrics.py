@@ -30,7 +30,8 @@ class MetricsManager():
 
 
 def policy_value_gradient_ratio(session, loss_components):
-    policy_loss, value_loss, reg_loss = loss_components
+    policy_loss, value_z_loss, value_q_loss, reg_loss = loss_components
+    value_loss = 0.5 * (value_z_loss + value_q_loss)
 
     # compute policy gradient
     policy_loss.backward(retain_graph=True)

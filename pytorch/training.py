@@ -148,30 +148,36 @@ class Session():
                 split_loss, loss_components = self.forward(split)
                 (split_loss / len(splits)).backward(retain_graph=retain_grad_buffers)
         gradient_norm = nn.utils.clip_grad_norm_(self.net.parameters(), self.cfg['training']['max_gradient_norm'])
-        self.lr_scheduler.step(self.step)
         self.optimizer.step()
         self.optimizer.zero_grad()
+        self.lr_scheduler.step(self.step)
         self.metrics.update('gradient_norm', gradient_norm)
-        if self.step_is_multiple('logging', 'gradient_ratio_every'):
-            self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation
         '''
         # Move batch to the GPU
-        input_planes, policy_target, value_target = batch
+        input_planes, policy_target, value_z_target, value_q_target = batch
         input_planes = input_planes.cuda(non_blocking=True)
         policy_target = policy_target.cuda(non_blocking=True)
-        value_target = value_target.cuda(non_blocking=True)
+        value_z_target = value_z_target.cuda(non_blocking=True)
+        value_q_target = value_q_target.cuda(non_blocking=True)
 
         # Forward batch through the network
-        policy, value = self.net(input_planes)
+        policy, value_z, value_q = self.net(input_planes)
 
         # Compute losses
         policy_logits = F.log_softmax(policy, dim=1)
+        # Mask to output only legal moves
+        is_illegal = policy_target < 0
+        #policy_logits = policy_logits - 100 * is_illegal
+        #policy_target = policy_target * is_illegal.logical_not()
         # this has the same gradient as cross-entropy
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
-        value_loss = F.cross_entropy(value, value_target)
+        value_z_loss = F.cross_entropy(value_z, value_z_target)
+        value_q_loss = F.kl_div(F.log_softmax(value_q, dim=1), value_q_target, reduction='batchmean')
+#        value_loss = 0.5 * (value_z_loss + value_q_loss)
+        value_loss = value_z_loss
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
@@ -182,22 +188,26 @@ class Session():
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
             policy_accuracy = metrics.accuracy(policy, vector=policy_target)
-            value_accuracy = metrics.accuracy(value, index=value_target)
+            value_z_accuracy = metrics.accuracy(value_z, index=value_z_target)
+            value_q_accuracy = metrics.accuracy(value_q, index=value_q_target.argmax(dim=1))
             policy_target_entropy = metrics.entropy(policy_target)
 
         # store the metrics so that other functions have access to them
         self.metrics.update('policy_loss', policy_loss.item())
+        self.metrics.update('value_z_loss', value_z_loss.item())
+        self.metrics.update('value_q_loss', value_q_loss.item())
         self.metrics.update('value_loss', value_loss.item())
         self.metrics.update('reg_loss', reg_loss.item() * 1e-4)
         self.metrics.update('total_loss', total_loss.item())
         self.metrics.update('policy_accuracy', policy_accuracy.item() * 100)
-        self.metrics.update('value_accuracy', value_accuracy.item() * 100)
+        self.metrics.update('value_z_accuracy', value_z_accuracy.item() * 100)
+        self.metrics.update('value_q_accuracy', value_q_accuracy.item() * 100)
         self.metrics.update('policy_target_entropy', policy_target_entropy.item())
 
-        return total_loss, (policy_loss, value_loss, reg_loss)
+        return total_loss, (policy_loss, value_z_loss, value_q_loss, reg_loss)
 
     def print_metrics(self, prefix):
-        fields = ['total', 'policy', 'value', 'reg']
+        fields = ['total', 'policy', 'value_z', 'value_q', 'reg']
         values = ['{:.4f}'.format(self.metrics[f'{field}_loss']) for field in fields]
         pairs = list(zip(fields, values))
         pairs.insert(0, ('step', self.step))

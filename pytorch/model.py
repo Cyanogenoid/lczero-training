@@ -39,8 +39,8 @@ class Net(nn.Module):
         x = self.residual_stack(x)
 
         policy = self.policy_head(x)
-        value = self.value_head(x)
-        return policy, value
+        value_z, value_q = self.value_head(x)
+        return policy, value_z, value_q
 
     def conv_and_linear_weights(self):
         return [m.weight for m in self.modules() if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear)]
@@ -98,21 +98,28 @@ class PolicyHead(nn.Module):
     def forward(self, x):
         x = self.conv_block(x)
         x = self.conv(x)
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = x.gather(dim=1, index=self.policy_map.expand(x.size(0), self.policy_map.size(1)))
         return x
 
 
-class ValueHead(nn.Sequential):
+class ValueHead(nn.Module):
     def __init__(self, in_channels, value_channels, lin_channels):
-        super().__init__(OrderedDict([
+        super().__init__()
+        self.layers = nn.Sequential(OrderedDict([
             ('conv_block', ConvBlock(in_channels, value_channels, 1)),
             ('flatten', Flatten()),
             ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
-            ('relu1', nn.ReLU(inplace=True)),
-            ('lin2', nn.Linear(lin_channels, 3)),
+            ('relu1', nn.ReLU()),
         ]))
+        self.z_head = nn.Linear(lin_channels, 3)
+        self.q_head = nn.Linear(lin_channels, 3)
 
+    def forward(self, x):
+        x = self.layers(x)
+        z = self.z_head(x)
+        q = self.q_head(x)
+        return z, q
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
@@ -180,7 +187,7 @@ class Flatten(nn.Module):
         super().__init__()
 
     def forward(self, x):
-        return x.view(x.size(0), -1)
+        return x.reshape(x.size(0), -1)
 
 
 '''
@@ -206,6 +213,10 @@ def extract_weights(m):
     elif isinstance(m, SqueezeExcitation):
         yield from extract_weights(m.lin1)
         yield from extract_weights(m.lin2)
+
+    elif isinstance(m, ValueHead):
+        yield from extract_weights(m.layers)
+        # TODO export z and q heads
 
     elif isinstance(m, PolicyHead):
         yield from extract_weights(m.conv_block)
