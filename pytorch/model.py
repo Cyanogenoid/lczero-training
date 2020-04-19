@@ -170,12 +170,12 @@ class SqueezeExcitation(nn.Module):
         n, c, h, w = x.size()
         x_in = x
 
-        x = self.pool(x).view(n, c)
+        x = self.pool(x).reshape(n, c)
         x = self.lin1(x)
         x = self.relu(x)
         x = self.lin2(x)
 
-        x = x.view(n, 2 * c, 1, 1)
+        x = x.reshape(n, 2 * c, 1, 1)
         scale, shift = x.chunk(2, dim=1)
 
         x = scale.sigmoid() * x_in + shift

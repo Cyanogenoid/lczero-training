@@ -20,6 +20,7 @@ import metrics
 
 class Session():
     def __init__(self, cfg):
+        torch.backends.cudnn.enabled = False
         self.cfg = cfg
 
         # let cudnn find the best algorithm
@@ -176,8 +177,7 @@ class Session():
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
         value_z_loss = F.cross_entropy(value_z, value_z_target)
         value_q_loss = F.kl_div(F.log_softmax(value_q, dim=1), value_q_target, reduction='batchmean')
-#        value_loss = 0.5 * (value_z_loss + value_q_loss)
-        value_loss = value_z_loss
+        value_loss = 0.5 * (value_z_loss + value_q_loss)
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
