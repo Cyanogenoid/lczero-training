@@ -175,10 +175,10 @@ class Session():
         #policy_target = policy_target * is_illegal.logical_not()
         # this has the same gradient as cross-entropy
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
-        value_z_loss = F.cross_entropy(value_z, value_z_target)
+        value_z_loss = F.kl_div(F.log_softmax(value_z, dim=1), value_z_target)
         value_q_loss = F.kl_div(F.log_softmax(value_q, dim=1), value_q_target, reduction='batchmean')
         mixed_target = self.cfg['training']['q_ratio'] * value_q_target + (1 - self.cfg['training']['q_ratio']) * value_z_target
-        value_loss = F.cross_entropy(value_z, mixed_target)
+        value_loss = F.kl_div(F.log_softmax(value_z, dim=1), mixed_target)
         flat_weights = nn.utils.parameters_to_vector(self.net.module.conv_and_linear_weights())
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
@@ -189,7 +189,7 @@ class Session():
         # Compute other per-batch metrics
         with torch.no_grad():  # no need to keep store gradient for these
             policy_accuracy = metrics.accuracy(policy, vector=policy_target)
-            value_z_accuracy = metrics.accuracy(value_z, index=value_z_target)
+            value_z_accuracy = metrics.accuracy(value_z, index=value_z_target.argmax(dim=1))
             value_q_accuracy = metrics.accuracy(value_q, index=value_q_target.argmax(dim=1))
             policy_target_entropy = metrics.entropy(policy_target)
 

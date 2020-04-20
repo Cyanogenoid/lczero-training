@@ -69,7 +69,7 @@ def parse_v4(position):
     planes = torch.cat([planes, flat_planes], dim=0)
 
     probs = torch.from_numpy(np.frombuffer(probs, dtype=np.float32))
-    z_wdl = [1, 0, -1].index(winner)
+    z_wdl = torch.FloatTensor([winner == 1, winner == 0, winner == -1])
 
     best_q_w = 0.5 * (1 - best_d + best_q)
     best_q_l = 0.5 * (1 - best_d - best_q)
