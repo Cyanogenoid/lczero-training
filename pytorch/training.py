@@ -20,7 +20,7 @@ import metrics
 
 class Session():
     def __init__(self, cfg):
-        torch.backends.cudnn.enabled = False
+        #torch.backends.cudnn.enabled = False
         self.cfg = cfg
 
         # let cudnn find the best algorithm

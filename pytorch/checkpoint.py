@@ -39,6 +39,7 @@ def save(session):
     with open(os.path.join(directory, 'latest'), 'w') as fd:
         fd.write(f'{path}\n')
     # proto weights
+    '''
     filename = f'net-{session.step}.pb.gz'
     path = os.path.join(directory, filename)
     session.net.module.export_proto(path)
@@ -46,3 +47,4 @@ def save(session):
         filename = f'net-swa-{session.step}.pb.gz'
         path = os.path.join(directory, filename)
         session.swa.net.module.export_proto(path)
+        '''

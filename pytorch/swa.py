@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import copy
 
 import torch
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 import utils
 
