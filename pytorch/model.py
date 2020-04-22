@@ -98,7 +98,7 @@ class PolicyHead(nn.Module):
     def forward(self, x):
         x = self.conv_block(x)
         x = self.conv(x)
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)
         x = x.gather(dim=1, index=self.policy_map.expand(x.size(0), self.policy_map.size(1)))
         return x
 
@@ -180,7 +180,7 @@ class Flatten(nn.Module):
         super().__init__()
 
     def forward(self, x):
-        return x.view(x.size(0), -1)
+        return x.reshape(x.size(0), -1)
 
 
 '''
