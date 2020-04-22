@@ -175,7 +175,7 @@ class Session():
         #policy_target = policy_target * is_illegal.logical_not()
         # this has the same gradient as cross-entropy
         policy_loss = F.kl_div(policy_logits, policy_target, reduction='batchmean')
-        value_z_loss = F.kl_div(F.log_softmax(value_z, dim=1), value_z_target)
+        value_z_loss = F.kl_div(F.log_softmax(value_z, dim=1), value_z_target, reduction='batchmean')
         value_q_loss = F.kl_div(F.log_softmax(value_q, dim=1), value_q_target, reduction='batchmean')
         mixed_target = self.cfg['training']['q_ratio'] * value_q_target + (1 - self.cfg['training']['q_ratio']) * value_z_target
         value_loss = F.kl_div(F.log_softmax(value_z, dim=1), mixed_target)
