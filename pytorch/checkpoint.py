@@ -38,6 +38,7 @@ def save(session):
     # store path so that we know what checkpoint to resume from without specifying it
     with open(os.path.join(directory, 'latest'), 'w') as fd:
         fd.write(f'{path}\n')
+    '''
     # proto weights
     filename = f'net-{session.step}.pb.gz'
     path = os.path.join(directory, filename)
@@ -46,3 +47,4 @@ def save(session):
         filename = f'net-swa-{session.step}.pb.gz'
         path = os.path.join(directory, filename)
         session.swa.net.module.export_proto(path)
+    '''
