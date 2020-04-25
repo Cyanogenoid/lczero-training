@@ -20,8 +20,7 @@ class Net(nn.Module):
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
-        self.value_z_head = ValueHead(channels, 32, 128)
-        self.value_q_head = ValueHead(channels, 32, 128)
+        self.value_head = ValueHead(channels, 32, 128)
 
         self.reset_parameters()
 
@@ -40,8 +39,7 @@ class Net(nn.Module):
         x = self.residual_stack(x)
 
         policy = self.policy_head(x)
-        value_z = self.value_z_head(x)
-        value_q = self.value_q_head(x)
+        value_z, value_q = self.value_head(x)
         return policy, value_z, value_q
 
     def conv_and_linear_weights(self):
@@ -114,12 +112,14 @@ class ValueHead(nn.Module):
             ('lin1', nn.Linear(value_channels * 8 * 8, lin_channels)),
             ('relu1', nn.ReLU()),
         ]))
-        self.head = nn.Linear(lin_channels, 3)
+        self.z_head = nn.Linear(lin_channels, 3)
+        self.q_head = nn.Linear(lin_channels, 3)
 
     def forward(self, x):
         x = self.layers(x)
-        x = self.head(x)
-        return x
+        z = self.z_head(x)
+        q = self.q_head(x)
+        return z, q
 
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
