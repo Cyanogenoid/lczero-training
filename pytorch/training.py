@@ -155,7 +155,7 @@ class Session():
         self.metrics.update('gradient_norm', gradient_norm)
         if self.step_is_multiple('logging', 'gradient_ratio_every'):
             self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
-            self.metrics.update('z_q_gradient_ratio', metrics.zq_gradient_ratio(self, loss_components))
+            self.metrics.update('zq_gradient_ratio', metrics.zq_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation

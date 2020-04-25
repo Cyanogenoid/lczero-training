@@ -37,5 +37,6 @@ def log_session(session, writer):
     if writer == session.train_writer:  # target data comes from same distribution, so no point plotting it again
         writer.add_scalar('metrics/policy_target_entropy', session.metrics['policy_target_entropy'], global_step=session.step)
         writer.add_scalar('metrics/gradient_norm', session.metrics['gradient_norm'], global_step=session.step)
-        #writer.add_scalar('metrics/policy_value_gradient_ratio', session.metrics['policy_value_gradient_ratio'], global_step=session.step)
+        writer.add_scalar('metrics/policy_value_gradient_ratio', session.metrics['policy_value_gradient_ratio'], global_step=session.step)
+        writer.add_scalar('metrics/zq_gradient_ratio', session.metrics['zq_gradient_ratio'], global_step=session.step)
         writer.add_scalar('hyperparameter/learning_rate', session.lr_scheduler.get_lr()[0], global_step=session.step)
