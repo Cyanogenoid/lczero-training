@@ -153,6 +153,9 @@ class Session():
         self.optimizer.zero_grad()
         self.lr_scheduler.step(self.step)
         self.metrics.update('gradient_norm', gradient_norm)
+        if self.step_is_multiple('logging', 'gradient_ratio_every'):
+            self.metrics.update('policy_value_gradient_ratio', metrics.policy_value_gradient_ratio(self, loss_components))
+            self.metrics.update('z_q_gradient_ratio', metrics.zq_gradient_ratio(self, loss_components))
 
     def forward(self, batch):
         ''' Perform one step of either training or evaluation
@@ -182,7 +185,8 @@ class Session():
         reg_loss = flat_weights.dot(flat_weights) / 2
         total_loss = \
             self.cfg['training']['policy_weight'] * policy_loss + \
-            self.cfg['training']['value_weight'] * value_loss + \
+            self.cfg['training']['value_z_weight'] * value_z_loss + \
+            self.cfg['training']['value_q_weight'] * value_q_loss + \
             self.cfg['training']['reg_weight'] * reg_loss
 
         # Compute other per-batch metrics

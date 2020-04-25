@@ -40,7 +40,7 @@ def policy_value_gradient_ratio(session, loss_components):
     session.optimizer.zero_grad()
 
     # compute value gradient
-    value_loss.backward()
+    value_loss.backward(retain_graph=True)
     grads = torch.nn.utils.parameters_to_vector(p.grad for p in session.net.parameters())
     value_grad_norm = grads.norm(p=2).item()
     session.optimizer.zero_grad()
@@ -48,6 +48,26 @@ def policy_value_gradient_ratio(session, loss_components):
     # ratio of the two
     policy_value_ratio = policy_grad_norm / (policy_grad_norm + value_grad_norm)
     return policy_value_ratio
+
+
+def zq_gradient_ratio(session, loss_components):
+    policy_loss, value_z_loss, value_q_loss, reg_loss = loss_components
+
+    # compute policy gradient
+    value_z_loss.backward(retain_graph=True)
+    grads = torch.nn.utils.parameters_to_vector(p.grad for p in session.net.parameters())
+    z_grad_norm = grads.norm(p=2).item()
+    session.optimizer.zero_grad()
+
+    # compute value gradient
+    value_q_loss.backward()
+    grads = torch.nn.utils.parameters_to_vector(p.grad for p in session.net.parameters())
+    q_grad_norm = grads.norm(p=2).item()
+    session.optimizer.zero_grad()
+
+    # ratio of the two
+    zq_ratio = z_grad_norm / (z_grad_norm + q_grad_norm)
+    return zq_ratio
 
 
 def accuracy(predicted, vector=None, index=None):
