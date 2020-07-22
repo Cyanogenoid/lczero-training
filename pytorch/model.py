@@ -1,8 +1,10 @@
+import math
 from collections import OrderedDict
 
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import torch.nn.functional as F
 
 import lc0_az_policy_map
 import net as proto_net
@@ -14,15 +16,18 @@ class Net(nn.Module):
         super().__init__()
         channels = residual_channels
 
-        self.conv_block = ConvBlock(112, channels, 3, padding=1)
+        self.conv_block = ConvBlock(112 + 2, channels, 3, padding=1)
 
-        blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
+        blocks = [(f'block{i+1}', TransformerBlock(channels, 8, se_ratio)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
         self.policy_head = PolicyHead(channels, policy_channels)
         self.value_head = ValueHead(channels, 32, 128)
 
         self.reset_parameters()
+
+        position = (torch.arange(8).float() / 7).repeat(8, 1).unsqueeze(0)
+        self.register_buffer('position_encoding', torch.cat([position, position.transpose(1, 2)], dim=0).unsqueeze(0))
 
     def reset_parameters(self):
         for module in self.modules():
@@ -35,6 +40,7 @@ class Net(nn.Module):
                 init.zeros_(module.bias)
 
     def forward(self, x):
+        x = torch.cat([x, self.position_encoding.expand(x.size(0), 2, 8, 8)], dim=1)
         x = self.conv_block(x)
         x = self.residual_stack(x)
 
@@ -81,6 +87,62 @@ class Net(nn.Module):
         torch.onnx.export(self, dummy_input, path, input_names=input_names, output_names=output_names, verbose=True)
 
 
+class TransformerBlock(nn.Module):
+    def __init__(self, channels, heads, se_ratio):
+        super().__init__()
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.bn2 = nn.BatchNorm2d(channels)
+        self.self_attention = SelfAttention(channels, heads)
+        self.residual_block = ResidualBlock(channels, se_ratio)
+
+    def forward(self, x):
+        x_in = x
+        x = self.bn1(x)
+        x = self.self_attention(x)
+        x = x_in + x
+
+        x_in = x
+        x = self.bn2(x)
+        x = self.residual_block(x)
+        x = x_in + x
+
+        return x
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, channels, heads, ratio=8):
+        super().__init__()
+        self.heads = heads
+        attention_channels = heads * channels // ratio
+        self.input = nn.Conv1d(channels, 3 * attention_channels, 1)
+        self.output = nn.Conv1d(attention_channels, channels, 1)
+
+        # softmax scale from paper
+        # xavier init that we want
+        # undo xavier init that is being applied
+        self.input_scale = \
+            1/math.sqrt(channels // ratio) * \
+            math.sqrt(2 / (channels + attention_channels)) / \
+            math.sqrt(2 / (channels + 3 * attention_channels))
+
+    def forward(self, x):
+        # NCHW -> NCL where L is now the set size
+        n, c, h, w = x.size()
+        l = h * w
+        x = x.view(n, c, l)
+
+        queries, keys, values = self.input(x).view(n, self.heads, -1, l).chunk(3, dim=2)
+        # shapes for Q, K, V: n, heads, c, l
+        keys = F.softmax(keys, dim=3)
+        queries = F.softmax(queries, dim=2)
+
+        global_context = keys.matmul(values.transpose(2, 3))  # shape: d_k x d_v
+        heads = queries.transpose(2, 3).matmul(global_context).transpose(2, 3)
+
+        output = self.output(heads.reshape(n, -1, l))
+        return output.view(n, c, h, w)
+
+
 class PolicyHead(nn.Module):
     def __init__(self, in_channels, policy_channels):
         super().__init__()
@@ -121,30 +183,21 @@ class ValueHead(nn.Module):
         q = self.q_head(x)
         return z, q
 
+
 class ResidualBlock(nn.Module):
     def __init__(self, channels, se_ratio):
         super().__init__()
         # ResidualBlock can't be an nn.Sequential, because it would try to apply self.relu2
         # in the residual block even when not passed into the constructor
         self.layers = nn.Sequential(OrderedDict([
-            ('conv1', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn1', nn.BatchNorm2d(channels)),
+            ('conv1', nn.Conv2d(channels, channels, 1)),
             ('relu', nn.ReLU(inplace=True)),
-
-            ('conv2', nn.Conv2d(channels, channels, 3, padding=1, bias=False)),
-            ('bn2', nn.BatchNorm2d(channels)),
-
+            ('conv2', nn.Conv2d(channels, channels, 1)),
             ('se', SqueezeExcitation(channels, se_ratio)),
         ]))
-        self.relu2 = nn.ReLU(inplace=True)
 
     def forward(self, x):
-        x_in = x
-
         x = self.layers(x)
-
-        x = x + x_in
-        x = self.relu2(x)
         return x
 
 
