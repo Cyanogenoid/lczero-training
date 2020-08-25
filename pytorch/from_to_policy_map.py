@@ -11,6 +11,7 @@ def square_to_index(square):
 
 def promote_to_index(target, piece):
     file, rank = target
+    file = ord(file) - ord('a')
     rank = int(rank) - 1
     if rank < 7:  # trying to promote not on the backrank
         return None
@@ -18,7 +19,7 @@ def promote_to_index(target, piece):
         index = 2
     else:
         index = ['q', 'b', 'k', 'r'].index(piece)
-    return 8 * index + rank
+    return 8 * index + file
 
 
 # castling should really have its own move
