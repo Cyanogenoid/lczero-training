@@ -3,23 +3,30 @@ from policy_index import policy_index
 
 
 def square_to_index(square):
-    file, rank = square
-    file = ord(file) - ord('a')
-    rank = int(rank) - 1
+    file, rank = parse_square(square)
     return 8 * rank + file
 
 
-def promote_to_index(target, piece):
-    file, rank = target
+def parse_square(square):
+    file, rank = square
     file = ord(file) - ord('a')
     rank = int(rank) - 1
-    if rank < 7:  # trying to promote not on the backrank
+    return file, rank
+
+def promote_to_index(source, target, piece):
+    source_file, source_rank = parse_square(source)
+    target_file, target_rank = parse_square(target)
+    if target_rank != 7:  # trying to promote not on the backrank
+        return None
+    if source_rank != 6:  # not a 1 step pawn move
+        return None
+    if abs(source_file - target_file) >= 2:  # actually a knight move
         return None
     if not piece:  # a bit iffy, because knight is default promotion
         index = 2
     else:
         index = ['q', 'b', 'k', 'r'].index(piece)
-    return 8 * index + file
+    return 8 * index + target_file
 
 
 # castling should really have its own move
@@ -38,8 +45,8 @@ def create_from_to_indices():
 
         source_indices.append(square_to_index(source))
         target_indices.append(square_to_index(target))
-        promotion_indices.append(promote_to_index(target, promotion) or 2)
-        promotion_valid.append(promote_to_index(target, promotion) is not None)
+        promotion_indices.append(promote_to_index(source, target, promotion) or 2)
+        promotion_valid.append(promote_to_index(source, target, promotion) is not None)
 
     source_indices = torch.LongTensor(source_indices)
     target_indices = torch.LongTensor(target_indices)
