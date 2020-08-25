@@ -93,6 +93,7 @@ class PolicyHead(nn.Module):
         self.register_buffer('target_map', target.unsqueeze(0).unsqueeze(0).expand(1, output_channels, source.size(0)))
         self.register_buffer('promotion_map', promotion.unsqueeze(0))
         self.register_buffer('promotion_valid', promotion_valid.unsqueeze(0))
+        self.bias = nn.Parameter(torch.zeros(source.size(0)))
 
     def forward(self, x):
         x = self.conv_block(x)
@@ -115,7 +116,7 @@ class PolicyHead(nn.Module):
         promotion = promotion.gather(dim=1, index=pmap)
 
         dot_product = (source * target).sum(dim=1)
-        return dot_product + promotion * self.promotion_valid
+        return dot_product + promotion * self.promotion_valid + self.bias
 
 
 class ValueHead(nn.Module):
