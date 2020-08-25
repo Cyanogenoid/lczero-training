@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 
-import lc0_az_policy_map
+import from_to_policy_map
 import net as proto_net
 import proto.net_pb2 as pb
 
@@ -19,7 +19,7 @@ class Net(nn.Module):
         blocks = [(f'block{i+1}', ResidualBlock(channels, se_ratio)) for i in range(residual_blocks)]
         self.residual_stack = nn.Sequential(OrderedDict(blocks))
 
-        self.policy_head = PolicyHead(channels, policy_channels)
+        self.policy_head = PolicyHead(channels, policy_channels, policy_channels // 2)
         self.value_head = ValueHead(channels, 32, 128)
 
         self.reset_parameters()
@@ -82,25 +82,40 @@ class Net(nn.Module):
 
 
 class PolicyHead(nn.Module):
-    def __init__(self, in_channels, policy_channels):
+    def __init__(self, in_channels, policy_channels, output_channels):
         super().__init__()
         self.conv_block = ConvBlock(in_channels, policy_channels, 3, padding=1)
-        self.conv = nn.Conv2d(policy_channels, 80, 3, padding=1)
-        # fixed mapping from az conv output to lc0 policy
-        self.register_buffer('policy_map', self.create_gather_tensor())
-
-    def create_gather_tensor(self):
-        lc0_to_az_indices = dict(enumerate(lc0_az_policy_map.make_map('index')))
-        az_to_lc0_indices = {az: lc0 for lc0, az in lc0_to_az_indices.items()}
-        gather_indices = [lc0 for az, lc0 in sorted(az_to_lc0_indices.items()) if az != -1]
-        return torch.LongTensor(gather_indices).unsqueeze(0)
+        self.conv = nn.Conv2d(policy_channels, 2 * output_channels + 4, 3, padding=1)
+        self.output_channels = output_channels
+        # fixed mapping from from_to output to lc0 policy
+        source, target, promotion, promotion_valid = from_to_policy_map.create_from_to_indices()
+        self.register_buffer('source_map', source.unsqueeze(0).unsqueeze(0).expand(1, output_channels, source.size(0)))
+        self.register_buffer('target_map', target.unsqueeze(0).unsqueeze(0).expand(1, output_channels, source.size(0)))
+        self.register_buffer('promotion_map', promotion.unsqueeze(0))
+        self.register_buffer('promotion_valid', promotion_valid.unsqueeze(0))
 
     def forward(self, x):
         x = self.conv_block(x)
         x = self.conv(x)
-        x = x.reshape(x.size(0), -1)
-        x = x.gather(dim=1, index=self.policy_map.expand(x.size(0), self.policy_map.size(1)))
-        return x
+
+        n = x.size(0)
+        c = self.output_channels
+        policy_length = self.source_map.size(2)
+
+        source = x[:, 0:c].view(n, c, -1)
+        target = x[:, c:2*c].view(n, c, -1)
+        promotion = x[:, 2*c:2*c+4, 7].reshape(n, 4 * 8)  # only use backrank
+
+        smap = self.source_map.expand(n, c, policy_length)
+        tmap = self.target_map.expand(n, c, policy_length)
+        pmap = self.promotion_map.expand(n, policy_length)
+
+        source = source.gather(dim=2, index=smap)
+        target = target.gather(dim=2, index=tmap)
+        promotion = promotion.gather(dim=1, index=pmap)
+
+        dot_product = (source * target).sum(dim=1)
+        return dot_product + promotion * self.promotion_valid
 
 
 class ValueHead(nn.Module):
